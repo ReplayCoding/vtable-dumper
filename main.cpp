@@ -48,43 +48,53 @@ auto generate_symbol_map(const LIEF::Binary *binary) {
   return symbol_map;
 };
 
+struct vtable_data_t {
+  int vtable_num_of_methods;
+  std::map<uint64_t, LIEF::Symbol> vtable_members;
+};
+
+vtable_data_t get_vtable(LIEF::Binary *binary, auto symbol_map, uint64_t addr) {
+  auto pointer_size_for_binary = get_pointer_size_for_bin(binary);
+  std::map<uint64_t, LIEF::Symbol> vtable_members{};
+
+  // Skip non vtable stuff
+  const auto vtable_addr = addr + (2 * pointer_size_for_binary);
+
+  auto vtable_num_of_methods = 0;
+  auto current_loop_addr = vtable_addr;
+  while (true) {
+    auto data_at_offset = get_pointer_data_at_offset(binary, current_loop_addr,
+                                                     pointer_size_for_binary);
+    auto current_offset = current_loop_addr - vtable_addr;
+
+    if (symbol_map.contains(current_loop_addr)) {
+      // fmt::print("Skipping because of symbol {}",
+      // symbol_map[vtable_addr].name());
+      break;
+    };
+    if (data_at_offset == 0)
+      break;
+
+    vtable_members[current_offset] = symbol_map[data_at_offset];
+    vtable_num_of_methods++;
+    current_loop_addr += pointer_size_for_binary;
+  };
+  return { vtable_num_of_methods, vtable_members };
+};
+
 int main(int argc, const char **argv) {
   if (argc < 2)
     return 1;
   auto binary = LIEF::Parser::parse(argv[1]);
-  auto pointer_size_for_binary = get_pointer_size_for_bin(binary.get());
   auto symbol_map = generate_symbol_map(binary.get());
   for (const auto &[addr, symbol] : symbol_map) {
     auto name = fixup_symbol_name(binary->format(), symbol);
     if (name.starts_with("_ZTV")) {
-      std::map<uint64_t, LIEF::Symbol> vtable_members{};
+      auto vtable_data = get_vtable(binary.get(), symbol_map, addr);
 
       fmt::print("{} = {:#08x}\n", name, addr);
-
-      // Skip non vtable stuff
-      const auto vtable_addr = addr + (2 * pointer_size_for_binary);
-
-      auto vtable_num_of_methods = 0;
-      auto current_loop_addr = vtable_addr;
-      while (true) {
-        auto data_at_offset = get_pointer_data_at_offset(
-            binary.get(), current_loop_addr, pointer_size_for_binary);
-        auto current_offset = current_loop_addr - vtable_addr;
-
-        if (symbol_map.contains(current_loop_addr)) {
-          // fmt::print("Skipping because of symbol {}",
-          // symbol_map[vtable_addr].name());
-          break;
-        };
-        if (data_at_offset == 0)
-          break;
-
-        vtable_members[current_offset] = symbol_map[data_at_offset];
-        vtable_num_of_methods++;
-        current_loop_addr += pointer_size_for_binary;
-      };
-      fmt::print("\tnumber of vtable methods: {}\n", vtable_num_of_methods);
-      for (const auto &[offset, member_symbol] : vtable_members) {
+      fmt::print("\tnumber of vtable methods: {}\n", vtable_data.vtable_num_of_methods);
+      for (const auto &[offset, member_symbol] : vtable_data.vtable_members) {
         std::string formatted_name = "";
         if (member_symbol.name().empty()) {
           formatted_name = fmt::format("{:#08X}", member_symbol.value());
