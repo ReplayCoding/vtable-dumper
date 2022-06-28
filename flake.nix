@@ -16,8 +16,8 @@
     in {
       devShell = pkgs.stdenv.mkDerivation {
         name = "shell";
-        nativeBuildInputs = with pkgs; [ meson pkg-config ninja ];
-        buildInputs = with pkgs; [ lief ];
+        nativeBuildInputs = with pkgs; [meson pkg-config ninja];
+        buildInputs = with pkgs; [lief fmt];
       };
     });
 }
