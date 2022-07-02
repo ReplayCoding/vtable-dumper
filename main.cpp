@@ -39,7 +39,7 @@ auto fixup_symbol_name(LIEF::EXE_FORMATS format, LIEF::Symbol symbol) {
 };
 
 auto generate_symbol_map(const LIEF::Binary *binary) {
-  std::unordered_map<uint64_t, LIEF::Symbol> symbol_map{};
+  std::map<uint64_t, LIEF::Symbol> symbol_map{};
   for (auto &symbol : binary->symbols()) {
     auto phys_addr = symbol.value();
     auto virtual_addr = binary->offset_to_virtual_address(phys_addr);
@@ -49,6 +49,7 @@ auto generate_symbol_map(const LIEF::Binary *binary) {
 };
 
 struct vtable_data_t {
+  int pointer_size;
   int vtable_num_of_methods;
   std::map<uint64_t, LIEF::Symbol> vtable_members;
 };
@@ -72,14 +73,16 @@ vtable_data_t get_vtable(LIEF::Binary *binary, auto symbol_map, uint64_t addr) {
       // symbol_map[vtable_addr].name());
       break;
     };
-    if (data_at_offset == 0)
-      break;
+    // if (data_at_offset == 0)
+    //   break;
 
     vtable_members[current_offset] = symbol_map[data_at_offset];
     vtable_num_of_methods++;
     current_loop_addr += pointer_size_for_binary;
   };
-  return { vtable_num_of_methods, vtable_members };
+  return {.pointer_size = pointer_size_for_binary,
+          .vtable_num_of_methods = vtable_num_of_methods,
+          .vtable_members = vtable_members};
 };
 
 int main(int argc, const char **argv) {
@@ -93,7 +96,8 @@ int main(int argc, const char **argv) {
       auto vtable_data = get_vtable(binary.get(), symbol_map, addr);
 
       fmt::print("{} = {:#08x}\n", name, addr);
-      fmt::print("\tnumber of vtable methods: {}\n", vtable_data.vtable_num_of_methods);
+      fmt::print("\tnumber of vtable methods: {}\n",
+                 vtable_data.vtable_num_of_methods);
       for (const auto &[offset, member_symbol] : vtable_data.vtable_members) {
         std::string formatted_name = "";
         if (member_symbol.name().empty()) {
@@ -101,7 +105,8 @@ int main(int argc, const char **argv) {
         } else {
           formatted_name = fixup_symbol_name(binary->format(), member_symbol);
         };
-        fmt::print("\t{} is at offset {}\n", formatted_name, offset);
+        fmt::print("\t{} is at offset {} (member# {})\n", formatted_name,
+                   offset, offset / vtable_data.pointer_size);
       };
     };
   };
