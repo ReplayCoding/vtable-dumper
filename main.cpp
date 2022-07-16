@@ -73,6 +73,10 @@ vtable_data_t get_vtable(LIEF::Binary *binary, auto symbol_map, uint64_t addr) {
       // symbol_map[vtable_addr].name());
       break;
     };
+    if (!symbol_map.contains(data_at_offset)) {
+      // Could be a relocated weird magic thingy
+      break;
+    };
     // if (data_at_offset == 0)
     //   break;
 
