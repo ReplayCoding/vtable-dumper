@@ -1,13 +1,13 @@
 #include "vtableextractor.hpp"
 #include <LIEF/LIEF.hpp>
 #include <fmt/core.h>
+#include <fmt/color.h>
 
 int main(int argc, const char **argv) {
   if (argc < 2)
     return 1;
   auto binary = LIEF::Parser::parse(argv[1]);
-  auto vtable_extractor = VtableExtractor(*binary);
-  auto vtables = vtable_extractor.get_vtables();
+  auto vtables = VtableExtractor(*binary).get_vtables();
 
   for (auto vtable : vtables) {
     fmt::print("{} = {:#08x}\n", vtable.name, vtable.addr);
@@ -20,8 +20,7 @@ int main(int argc, const char **argv) {
       } else {
         formatted_name = member.fixed_name;
       };
-      fmt::print("\t{} is at offset {} (member# {})\n", formatted_name, offset,
-                 offset / vtable.pointer_size);
+      fmt::print("\t{} is at offset {} (member# {})\n", formatted_name, offset, offset / vtable.pointer_size);
     };
   }
 };
