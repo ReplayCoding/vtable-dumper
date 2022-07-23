@@ -1,4 +1,4 @@
-#include "vtable.hpp"
+#include "vtableextractor.hpp"
 #include <LIEF/LIEF.hpp>
 #include <fmt/core.h>
 
