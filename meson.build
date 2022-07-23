@@ -6,6 +6,6 @@ lief_dep = dependency('LIEF')
 fmt_dep = dependency('fmt')
 executable('vtable_dumper',
            'main.cpp',
-           'vtable.cpp',
+           'vtableextractor.cpp',
            dependencies: [lief_dep, fmt_dep],
            install : true)
