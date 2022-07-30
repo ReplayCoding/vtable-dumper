@@ -21,9 +21,8 @@ uint64_t VtableExtractor::get_pointer_data_at_offset(uint64_t virtual_addr) {
   return unswapped_data;
 };
 
-std::string VtableExtractor::fixup_symbol_name(LIEF::Symbol symbol) {
-  auto name = symbol.name();
-  if (not(name.empty() || (symbol.value() == 0))) {
+std::string VtableExtractor::fixup_symbol_name(std::string name) {
+  if (not name.empty()) {
     if (binary.format() == LIEF::EXE_FORMATS::FORMAT_MACHO &&
         name.front() == '_') {
       // Remove the leading underscore, as per
@@ -42,11 +41,84 @@ void VtableExtractor::generate_symbol_map() {
   };
 };
 
+std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
+  switch (binary.format()) {
+    case LIEF::FORMAT_MACHO: {
+      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
+      auto section = binary_macho->section_from_virtual_address(addr);
+      const auto section_content = section->content().data();
+      auto string_content_unconverted =
+          &(section_content[addr - section->virtual_address()]);
+      return std::string(
+          reinterpret_cast<const char *>(string_content_unconverted));
+      break;
+    }
+    default: {
+      throw "Unknown binary format";
+      break;
+    }
+  };
+};
+VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
+  typeinfo_t typeinfo{};
+  switch (binary.format()) {
+    case LIEF::FORMAT_MACHO: {
+      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
+      const auto dyld_info = binary_macho->dyld_info();
+      // TODO: It's fast enough but we should cache this
+      std::string typeinfo_type{""};
+      for (const auto &binding_info : dyld_info->bindings()) {
+        if (addr == binding_info.address()) {
+          typeinfo_type = binding_info.symbol()->name();
+          break;
+        };
+      };
+      if (typeinfo_type == "")
+        throw "There should be a typeinfo class symbol here";
+      auto class_name = get_typeinfo_name(
+          get_pointer_data_at_offset(addr + pointer_size_for_binary));
+      typeinfo.typeinfo_type = fixup_symbol_name(typeinfo_type);
+      typeinfo.name = class_name;
+      break;
+    }
+    default: {
+      throw "Unknown binary format";
+      break;
+    }
+  };
+
+  if (typeinfo.typeinfo_type.find("__si_class_type_info") !=
+      std::string::npos) {
+    auto base_typeinfo = parse_typeinfo(
+        get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary)));
+    typeinfo.base_type = std::make_shared<typeinfo_t>(base_typeinfo);
+  }
+  return typeinfo;
+};
+
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
-  // Skip non vtable stuff
-  const auto vtable_addr = addr + (2 * pointer_size_for_binary);
+  // Skip vptr offset
+  auto typeinfo_addr =
+      get_pointer_data_at_offset(addr + pointer_size_for_binary);
+
+  // This is a fix for certain classes where the symbol is put three pointers
+  // before the vtable, which puts the typeinfo one pointer down. (since it's at
+  // entry "-1" of the vtable). This is purely a heuristic since the
+  // offset-to-top pointers could be non-null, but it seems to work at every
+  // case i've thrown at it so far. TODO: Can we make this more stable?
+  //
+  // This var is used to fixup the vtable offset.
+  int vtable_offset_from_symbol = 2 * pointer_size_for_binary;
+  if (typeinfo_addr == 0) {
+    vtable_offset_from_symbol += pointer_size_for_binary;
+    typeinfo_addr =
+        get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary));
+  }
+  auto typeinfo = parse_typeinfo(typeinfo_addr);
+
+  const auto vtable_addr = addr + vtable_offset_from_symbol;
 
   auto vtable_num_of_methods = 0;
   auto current_loop_addr = vtable_addr;
@@ -70,13 +142,14 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
     auto symbol = symbol_map[data_at_offset];
     vtable_members[current_offset] = {
         .symbol = symbol,
-        .fixed_name = fixup_symbol_name(symbol),
+        .fixed_name = fixup_symbol_name(symbol.name()),
     };
     vtable_num_of_methods++;
     current_loop_addr += pointer_size_for_binary;
   };
   return {
       // name is set in get_vtables
+      .typeinfo = typeinfo,
       .addr = addr,
       .pointer_size = pointer_size_for_binary,
       .vtable_num_of_methods = vtable_num_of_methods,
@@ -87,7 +160,7 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
 std::vector<VtableExtractor::vtable_data_t> VtableExtractor::get_vtables() {
   std::vector<VtableExtractor::vtable_data_t> vtables{};
   for (const auto &[addr, symbol] : symbol_map) {
-    auto name = fixup_symbol_name(symbol);
+    auto name = fixup_symbol_name(symbol.name());
     if (name.starts_with("_ZTV")) {
       auto vtable_data = get_vtable(addr);
       vtable_data.name = name;
