@@ -2,6 +2,14 @@
 #include <LIEF/LIEF.hpp>
 #include <fmt/core.h>
 
+void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
+  fmt::print(prefix + "type: {}\n", typeinfo.typeinfo_type);
+  fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
+  if (typeinfo.base_type) {
+    print_typeinfo(*typeinfo.base_type, prefix + "\t");
+  };
+};
+
 int main(int argc, const char **argv) {
   if (argc != 2) {
     fmt::print("usage: {} <binary>\n", argv[0]);
@@ -12,6 +20,10 @@ int main(int argc, const char **argv) {
 
   for (auto vtable : vtables) {
     fmt::print("{} = {:#08x}\n", vtable.name, vtable.addr);
+
+    fmt::print("\ttypeinfo:\n");
+    print_typeinfo(vtable.typeinfo, "\t\t");
+
     fmt::print("\tnumber of vtable methods: {}\n",
                vtable.vtable_num_of_methods);
     for (const auto &[offset, member] : vtable.vtable_members) {
