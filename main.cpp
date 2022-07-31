@@ -3,10 +3,19 @@
 #include <fmt/core.h>
 
 void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
-  fmt::print(prefix + "type: {}\n", typeinfo.typeinfo_type);
+  fmt::print(prefix + "type: {}\n",
+             typeinfo_type_lookup[typeinfo.typeinfo_type]);
   fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
-  if (typeinfo.base_type) {
-    print_typeinfo(*typeinfo.base_type, prefix + "\t");
+  switch (typeinfo.typeinfo_type) {
+    case VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO: {
+      print_typeinfo(*typeinfo.base_type, prefix + "\t");
+      break;
+    };
+    case VtableExtractor::typeinfo_t::VMI_CLASS_TYPE_INFO: {
+      break;
+    }
+    case VtableExtractor::typeinfo_t::CLASS_TYPE_INFO:
+      break;
   };
 };
 

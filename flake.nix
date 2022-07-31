@@ -16,7 +16,8 @@
     in {
       devShell = pkgs.stdenv.mkDerivation {
         name = "shell";
-        nativeBuildInputs = with pkgs; [meson pkg-config ninja];
+        SYSTEMD_DEBUGGER = "lldb";
+        nativeBuildInputs = with pkgs; [meson pkg-config ninja lldb];
         buildInputs = with pkgs; [lief fmt];
       };
     });
