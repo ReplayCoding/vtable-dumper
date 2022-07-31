@@ -54,7 +54,7 @@ std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
       break;
     }
     default: {
-      throw "Unknown binary format";
+      throw StringError("Unknown binary format");
       break;
     }
   };
@@ -74,25 +74,46 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
         };
       };
       if (typeinfo_type == "")
-        throw "There should be a typeinfo class symbol here";
+        throw StringError(fmt::format(
+            "There should be a typeinfo class symbol here. Address is {}",
+            addr));
       auto class_name = get_typeinfo_name(
           get_pointer_data_at_offset(addr + pointer_size_for_binary));
-      typeinfo.typeinfo_type = fixup_symbol_name(typeinfo_type);
+      auto typeinfo_classinfo_name = fixup_symbol_name(typeinfo_type);
+      typeinfo.typeinfo_type = typeinfo_t::CLASS_TYPE_INFO;
+      if (typeinfo_classinfo_name.find("__si_class_type_info") !=
+          std::string::npos) {
+        typeinfo.typeinfo_type = typeinfo_t::SI_CLASS_TYPE_INFO;
+      } else if (typeinfo_classinfo_name.find("__vmi_class_type_info") !=
+                 std::string::npos) {
+        typeinfo.typeinfo_type = typeinfo_t::VMI_CLASS_TYPE_INFO;
+      }
       typeinfo.name = class_name;
       break;
     }
     default: {
-      throw "Unknown binary format";
+      throw StringError("Unknown binary format");
       break;
     }
   };
 
-  if (typeinfo.typeinfo_type.find("__si_class_type_info") !=
-      std::string::npos) {
-    auto base_typeinfo = parse_typeinfo(
-        get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary)));
-    typeinfo.base_type = std::make_shared<typeinfo_t>(base_typeinfo);
-  }
+  switch (typeinfo.typeinfo_type) {
+    case typeinfo_t::SI_CLASS_TYPE_INFO: {
+      auto typeinfo_addr =
+          get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary));
+      if (typeinfo_addr != 0) {
+        auto base_typeinfo = parse_typeinfo(typeinfo_addr);
+        typeinfo.base_type = std::make_shared<typeinfo_t>(base_typeinfo);
+      };
+      break;
+    };
+    case typeinfo_t::VMI_CLASS_TYPE_INFO: {
+      break /* a leg */;
+    };
+    default: {
+      break;
+    };
+  };
   return typeinfo;
 };
 
@@ -104,10 +125,11 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
       get_pointer_data_at_offset(addr + pointer_size_for_binary);
 
   // This is a fix for certain classes where the symbol is put three pointers
-  // before the vtable, which puts the typeinfo one pointer down. (since it's at
-  // entry "-1" of the vtable). This is purely a heuristic since the
+  // before the vtable, which puts the typeinfo one pointer down. (since it's
+  // at entry "-1" of the vtable). This is purely a heuristic since the
   // offset-to-top pointers could be non-null, but it seems to work at every
-  // case i've thrown at it so far. TODO: Can we make this more stable?
+  // case i've thrown at it so far. TODO: Can we make this more stable? Yeah we
+  // can just loop until the pointer points to a typeinfo symbol
   //
   // This var is used to fixup the vtable offset.
   int vtable_offset_from_symbol = 2 * pointer_size_for_binary;
