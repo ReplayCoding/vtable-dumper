@@ -9,15 +9,17 @@ int VtableExtractor::get_pointer_size_for_bin() {
     return 4;
   } else if (binary.header().is_64()) {
     return 8;
-  }
-  return -1;
+  } else {
+    throw StringError("Cant figure out valid pointer size");
+  };
 };
 
-uint64_t VtableExtractor::get_pointer_data_at_offset(uint64_t virtual_addr) {
-  auto bytes_at_mem = binary.get_content_from_virtual_address(
-      virtual_addr, pointer_size_for_binary);
-  uint64_t unswapped_data = {};
-  std::memcpy(&unswapped_data, bytes_at_mem.data(), pointer_size_for_binary);
+template <typename T>
+T VtableExtractor::get_data_at_offset(uint64_t virtual_addr) {
+  auto bytes_at_mem =
+      binary.get_content_from_virtual_address(virtual_addr, sizeof(T));
+  T unswapped_data = {};
+  std::memcpy(&unswapped_data, bytes_at_mem.data(), sizeof(T));
   return unswapped_data;
 };
 
@@ -75,10 +77,10 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
       };
       if (typeinfo_type == "")
         throw StringError(fmt::format(
-            "There should be a typeinfo class symbol here. Address is {}",
+            "There should be a typeinfo class symbol here. Address is {:08X}",
             addr));
-      auto class_name = get_typeinfo_name(
-          get_pointer_data_at_offset(addr + pointer_size_for_binary));
+      auto class_name =
+          get_typeinfo_name(get_ptr_at_offset(addr + pointer_size_for_binary));
       auto typeinfo_classinfo_name = fixup_symbol_name(typeinfo_type);
       typeinfo.typeinfo_type = typeinfo_t::CLASS_TYPE_INFO;
       if (typeinfo_classinfo_name.find("__si_class_type_info") !=
@@ -100,14 +102,37 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
   switch (typeinfo.typeinfo_type) {
     case typeinfo_t::SI_CLASS_TYPE_INFO: {
       auto typeinfo_addr =
-          get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary));
+          get_ptr_at_offset(addr + (2 * pointer_size_for_binary));
       if (typeinfo_addr != 0) {
         auto base_typeinfo = parse_typeinfo(typeinfo_addr);
-        typeinfo.base_type = std::make_shared<typeinfo_t>(base_typeinfo);
+        typeinfo.si_base_class = std::make_shared<typeinfo_t>(base_typeinfo);
       };
       break;
     };
     case typeinfo_t::VMI_CLASS_TYPE_INFO: {
+      auto flags =
+          get_data_at_offset<uint32_t>(addr + (2 * pointer_size_for_binary));
+      auto base_count =
+          get_data_at_offset<uint32_t>(addr + (3 * pointer_size_for_binary));
+      for (uint32_t i = 0; i < base_count; i++) {
+        typeinfo_t::vmi_base_class_t base_class_info{};
+        try {
+          // It could be located in a different lib, we will throw.
+          auto base_class = parse_typeinfo(get_ptr_at_offset(
+              addr + ((4 + (i * 2)) * pointer_size_for_binary)));
+          base_class_info.base_class = std::make_shared<typeinfo_t>(base_class);
+        } catch (std::exception &e) {
+          base_class_info.base_class = nullptr;
+        };
+        // TODO: This isn't compatible with X86-64 because this assumes that
+        // long is 32bits wide
+        auto offset_flags = get_data_at_offset<uint32_t>(
+            addr + ((5 + (i * 2)) * pointer_size_for_binary));
+        base_class_info.offset_flags = offset_flags;
+        typeinfo.vmi_base_class_info.emplace_back(base_class_info);
+      }
+      typeinfo.vmi_flags = flags;
+      typeinfo.vmi_base_count = base_count;
       break /* a leg */;
     };
     default: {
@@ -121,8 +146,7 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
   // Skip vptr offset
-  auto typeinfo_addr =
-      get_pointer_data_at_offset(addr + pointer_size_for_binary);
+  auto typeinfo_addr = get_ptr_at_offset(addr + pointer_size_for_binary);
 
   // This is a fix for certain classes where the symbol is put three pointers
   // before the vtable, which puts the typeinfo one pointer down. (since it's
@@ -135,8 +159,7 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   int vtable_offset_from_symbol = 2 * pointer_size_for_binary;
   if (typeinfo_addr == 0) {
     vtable_offset_from_symbol += pointer_size_for_binary;
-    typeinfo_addr =
-        get_pointer_data_at_offset(addr + (2 * pointer_size_for_binary));
+    typeinfo_addr = get_ptr_at_offset(addr + (2 * pointer_size_for_binary));
   }
   auto typeinfo = parse_typeinfo(typeinfo_addr);
 
@@ -145,7 +168,7 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   auto vtable_num_of_methods = 0;
   auto current_loop_addr = vtable_addr;
   while (true) {
-    auto data_at_offset = get_pointer_data_at_offset(current_loop_addr);
+    auto data_at_offset = get_ptr_at_offset(current_loop_addr);
     auto current_offset = current_loop_addr - vtable_addr;
 
     // Another vtable has most likely started

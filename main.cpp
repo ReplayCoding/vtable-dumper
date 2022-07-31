@@ -8,13 +8,25 @@ void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
   fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
   switch (typeinfo.typeinfo_type) {
     case VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO: {
-      print_typeinfo(*typeinfo.base_type, prefix + "\t");
+      if (typeinfo.si_base_class) {
+        print_typeinfo(*typeinfo.si_base_class, prefix + "\t");
+      };
       break;
     };
     case VtableExtractor::typeinfo_t::VMI_CLASS_TYPE_INFO: {
+      fmt::print(prefix + "flags: {:08X}\n", typeinfo.vmi_flags);
+      fmt::print(prefix + "base_count: {}\n", typeinfo.vmi_base_count);
+      for (auto &vmi_base_class : typeinfo.vmi_base_class_info) {
+        fmt::print(prefix + "\t" + "offset flags: {:08X}\n",
+                   vmi_base_class.offset_flags);
+        if (vmi_base_class.base_class) {
+          print_typeinfo(*vmi_base_class.base_class, prefix + "\t");
+        };
+        fmt::print(prefix + "\t\n");
+      };
       break;
     }
-    case VtableExtractor::typeinfo_t::CLASS_TYPE_INFO:
+    default:
       break;
   };
 };
