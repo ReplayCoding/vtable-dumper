@@ -38,7 +38,10 @@ public:
         std::shared_ptr<typeinfo_t> base_class;
         // I'm not completely sure if this is signed or not but thats what the
         // docs say sooooo
-        int64_t offset_flags;
+        struct {
+          uint8_t flags;
+          int64_t offset;
+        } offset_flags;
       };
       uint32_t flags;
       uint32_t base_count;
