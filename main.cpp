@@ -5,7 +5,7 @@
 void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
   fmt::print(prefix + "type: {}\n",
              typeinfo_type_lookup[typeinfo.typeinfo_type]);
-  fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
+  fmt::print(prefix + "name: {}\n", typeinfo.name);
   switch (typeinfo.typeinfo_type) {
     case VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO: {
       if (typeinfo.si_base_class) {
@@ -40,7 +40,7 @@ int main(int argc, const char **argv) {
   auto vtables = VtableExtractor(*binary).get_vtables();
 
   for (auto vtable : vtables) {
-    fmt::print("{} = {:#08x}\n", vtable.name, vtable.addr);
+    fmt::print("{} = {:#08x}\n", vtable.typeinfo.name, vtable.addr);
 
     fmt::print("\ttypeinfo:\n");
     print_typeinfo(vtable.typeinfo, "\t\t");

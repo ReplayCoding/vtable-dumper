@@ -46,7 +46,6 @@ public:
     std::string fixed_name{};
   };
   struct vtable_data_t {
-    std::string name{};
     typeinfo_t typeinfo{};
     uint64_t addr;
 
@@ -61,6 +60,7 @@ private:
   int get_pointer_size_for_bin();
   std::string fixup_symbol_name(std::string name);
   void generate_symbol_map();
+  void generate_binding_map();
   std::string get_typeinfo_name(uint64_t name);
   typeinfo_t parse_typeinfo(uint64_t addr);
   vtable_data_t get_vtable(uint64_t addr);
@@ -76,7 +76,8 @@ private:
     };
   };
 
-  std::map<uint64_t, LIEF::Symbol> symbol_map;
+  std::map<uint64_t, LIEF::Symbol> symbol_map{};
+  std::map<uint64_t, LIEF::Symbol> binding_map{};
   LIEF::Binary &binary;
   int pointer_size_for_binary;
 };
