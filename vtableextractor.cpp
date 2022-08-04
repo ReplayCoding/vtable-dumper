@@ -145,13 +145,7 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
-  // This is a fix for certain classes where the symbol is put three pointers
-  // before the vtable, which puts the typeinfo one pointer down. (since it's
-  // at entry "-1" of the vtable). This is purely a heuristic since the
-  // offset-to-top pointers could be non-null, but it seems to work at every
-  // case i've thrown at it so far. TODO: Can we make this more stable? Yeah we
-  // can just loop until the pointer points to a typeinfo symbol
-  //
+  // Handle offset-to-X ptrs in classes with X-in-Y vtables;
   // This var is used to fixup the vtable offset.
   int vtable_offset_from_symbol = 2 * pointer_size_for_binary;
   auto typeinfo_addr = 0;
@@ -182,17 +176,25 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
       // symbol_map[vtable_addr].name());
       break;
     };
-    if (!symbol_map.contains(data_at_offset)) {
-      // Could be a relocated weird magic thingy
+
+    auto symbol = symbol_map[data_at_offset].name();
+
+    // Could be a __cxa_pure_virtual binding, or just padding.
+    if (data_at_offset == 0) {
+      if (binding_map.contains(current_loop_addr))
+        symbol = binding_map[current_loop_addr].name();
+      else
+        break;
+    };
+
+    // Could be a relocated weird magic thingy so there hopefully wont be symbol
+    // FIXME!
+    if (symbol.empty()) {
       break;
     };
-    if (data_at_offset == 0)
-      break;
 
-    auto symbol = symbol_map[data_at_offset];
     vtable_members[current_offset] = {
-        .symbol = symbol,
-        .fixed_name = fixup_symbol_name(symbol.name()),
+        .name = fixup_symbol_name(symbol),
     };
     vtable_num_of_methods++;
     current_loop_addr += pointer_size_for_binary;

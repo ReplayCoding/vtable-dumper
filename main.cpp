@@ -48,14 +48,8 @@ int main(int argc, const char **argv) {
     fmt::print("\tnumber of vtable methods: {}\n",
                vtable.vtable_num_of_methods);
     for (const auto &[offset, member] : vtable.vtable_members) {
-      std::string formatted_name = "";
-      if (member.symbol.name().empty()) {
-        formatted_name = fmt::format("{:#08X}", member.symbol.value());
-      } else {
-        formatted_name = member.fixed_name;
-      };
-      fmt::print("\t{} is at offset {} (member# {})\n", formatted_name, offset,
-                 offset / vtable.pointer_size);
+      fmt::print("\t{} is at offset {} (member# {})\n", member.name,
+                 offset, offset / vtable.pointer_size);
     };
   }
 };

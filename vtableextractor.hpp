@@ -42,8 +42,7 @@ public:
     std::vector<vmi_base_class_t> vmi_base_class_info{};
   };
   struct vtable_member_t {
-    LIEF::Symbol symbol;
-    std::string fixed_name{};
+    std::string name{};
   };
   struct vtable_data_t {
     typeinfo_t typeinfo{};
