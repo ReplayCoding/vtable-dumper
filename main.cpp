@@ -17,8 +17,10 @@ void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
       fmt::print(prefix + "flags: {:08X}\n", typeinfo.vmi_class_ti.flags);
       fmt::print(prefix + "base_count: {}\n", typeinfo.vmi_class_ti.base_count);
       for (auto &vmi_base_class : typeinfo.vmi_class_ti.base_class_info) {
-        fmt::print(prefix + "\t" + "offset flags: {:08X}\n",
-                   vmi_base_class.offset_flags);
+        fmt::print(prefix + "\t" + "offset: {}\n",
+                   vmi_base_class.offset_flags.offset);
+        fmt::print(prefix + "\t" + "flags: {:X}\n",
+                   vmi_base_class.offset_flags.flags);
         if (vmi_base_class.base_class) {
           print_typeinfo(*vmi_base_class.base_class, prefix + "\t");
         };

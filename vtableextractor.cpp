@@ -118,18 +118,24 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
       for (uint32_t i = 0; i < base_count; i++) {
         typeinfo_t::vmi_class_type_info::vmi_base_class_t base_class_info{};
         try {
-          // It could be located in a different lib, we will throw.
+          // It could be located in a different lib, we will catch the error in
+          // this case.
           auto base_class = parse_typeinfo(get_ptr_at_offset(
               addr + ((4 + (i * 2)) * pointer_size_for_binary)));
           base_class_info.base_class = std::make_shared<typeinfo_t>(base_class);
         } catch (std::exception &e) {
           base_class_info.base_class = nullptr;
         };
-        // TODO: This isn't compatible with X86-64 because this assumes that
-        // long is 32bits wide
+
+        // FIXME: This isn't compatible with X86-64 because this assumes that
+        // long is 32bits wide, but im lazy
         auto offset_flags = get_data_at_offset<uint32_t>(
             addr + ((5 + (i * 2)) * pointer_size_for_binary));
-        base_class_info.offset_flags = offset_flags;
+        // Lower octet is flags
+        base_class_info.offset_flags.flags = offset_flags & 0xff;
+        // Rest is offset
+        base_class_info.offset_flags.offset = offset_flags >> 8;
+
         typeinfo.vmi_class_ti.base_class_info.emplace_back(base_class_info);
       }
       typeinfo.vmi_class_ti.flags = flags;
