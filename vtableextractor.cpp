@@ -43,6 +43,23 @@ void VtableExtractor::generate_symbol_map() {
   };
 };
 
+void VtableExtractor::generate_binding_map() {
+  switch (binary.format()) {
+    case LIEF::FORMAT_MACHO: {
+      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
+      const auto dyld_info = binary_macho->dyld_info();
+      for (const auto &binding_info : dyld_info->bindings()) {
+        binding_map[binding_info.address()] = *binding_info.symbol();
+      };
+      break;
+    };
+    default: {
+      throw StringError("Unkown binary format");
+      break;
+    };
+  };
+};
+
 std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
   switch (binary.format()) {
     case LIEF::FORMAT_MACHO: {
@@ -63,41 +80,24 @@ std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
 };
 VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
   typeinfo_t typeinfo{};
-  switch (binary.format()) {
-    case LIEF::FORMAT_MACHO: {
-      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
-      const auto dyld_info = binary_macho->dyld_info();
-      // TODO: It's fast enough but we should cache this
-      std::string typeinfo_type{""};
-      for (const auto &binding_info : dyld_info->bindings()) {
-        if (addr == binding_info.address()) {
-          typeinfo_type = binding_info.symbol()->name();
-          break;
-        };
-      };
-      if (typeinfo_type == "")
-        throw StringError(fmt::format(
-            "There should be a typeinfo class symbol here. Address is {:08X}",
-            addr));
-      auto class_name =
-          get_typeinfo_name(get_ptr_at_offset(addr + pointer_size_for_binary));
-      auto typeinfo_classinfo_name = fixup_symbol_name(typeinfo_type);
-      typeinfo.typeinfo_type = typeinfo_t::CLASS_TYPE_INFO;
-      if (typeinfo_classinfo_name.find("__si_class_type_info") !=
-          std::string::npos) {
-        typeinfo.typeinfo_type = typeinfo_t::SI_CLASS_TYPE_INFO;
-      } else if (typeinfo_classinfo_name.find("__vmi_class_type_info") !=
-                 std::string::npos) {
-        typeinfo.typeinfo_type = typeinfo_t::VMI_CLASS_TYPE_INFO;
-      }
-      typeinfo.name = class_name;
-      break;
-    }
-    default: {
-      throw StringError("Unknown binary format");
-      break;
-    }
-  };
+
+  auto typeinfo_type = binding_map[addr].name();
+  if (typeinfo_type == "")
+    throw StringError(fmt::format(
+        "There should be a typeinfo class symbol here. Address is {:08X}",
+        addr));
+  auto class_name =
+      get_typeinfo_name(get_ptr_at_offset(addr + pointer_size_for_binary));
+  auto typeinfo_classinfo_name = fixup_symbol_name(typeinfo_type);
+  typeinfo.typeinfo_type = typeinfo_t::CLASS_TYPE_INFO;
+  if (typeinfo_classinfo_name.find("__si_class_type_info") !=
+      std::string::npos) {
+    typeinfo.typeinfo_type = typeinfo_t::SI_CLASS_TYPE_INFO;
+  } else if (typeinfo_classinfo_name.find("__vmi_class_type_info") !=
+             std::string::npos) {
+    typeinfo.typeinfo_type = typeinfo_t::VMI_CLASS_TYPE_INFO;
+  }
+  typeinfo.name = class_name;
 
   switch (typeinfo.typeinfo_type) {
     case typeinfo_t::SI_CLASS_TYPE_INFO: {
@@ -145,9 +145,6 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
-  // Skip vptr offset
-  auto typeinfo_addr = get_ptr_at_offset(addr + pointer_size_for_binary);
-
   // This is a fix for certain classes where the symbol is put three pointers
   // before the vtable, which puts the typeinfo one pointer down. (since it's
   // at entry "-1" of the vtable). This is purely a heuristic since the
@@ -157,9 +154,17 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   //
   // This var is used to fixup the vtable offset.
   int vtable_offset_from_symbol = 2 * pointer_size_for_binary;
-  if (typeinfo_addr == 0) {
+  auto typeinfo_addr = 0;
+  while (true) {
+    typeinfo_addr = get_ptr_at_offset(addr + vtable_offset_from_symbol -
+                                      pointer_size_for_binary);
     vtable_offset_from_symbol += pointer_size_for_binary;
-    typeinfo_addr = get_ptr_at_offset(addr + (2 * pointer_size_for_binary));
+    if (symbol_map.contains(typeinfo_addr) &&
+        !symbol_map[typeinfo_addr].name().empty() &&
+        fixup_symbol_name(symbol_map[typeinfo_addr].name())
+            .starts_with("_ZTI")) {
+      break;
+    }
   }
   auto typeinfo = parse_typeinfo(typeinfo_addr);
 
@@ -208,7 +213,6 @@ std::vector<VtableExtractor::vtable_data_t> VtableExtractor::get_vtables() {
     auto name = fixup_symbol_name(symbol.name());
     if (name.starts_with("_ZTV")) {
       auto vtable_data = get_vtable(addr);
-      vtable_data.name = name;
       vtables.emplace_back(vtable_data);
     };
   };
@@ -218,4 +222,5 @@ std::vector<VtableExtractor::vtable_data_t> VtableExtractor::get_vtables() {
 VtableExtractor::VtableExtractor(LIEF::Binary &binary) : binary(binary) {
   pointer_size_for_binary = get_pointer_size_for_bin();
   generate_symbol_map();
+  generate_binding_map();
 };
