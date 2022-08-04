@@ -28,18 +28,22 @@ public:
     std::string name;
 
     // __si_class_type_info
-    std::shared_ptr<typeinfo_t> si_base_class;
+    struct si_class_type_info {
+      std::shared_ptr<typeinfo_t> base_class;
+    } si_class_ti{};
 
     // __vmi_class_type_info
-    struct vmi_base_class_t {
-      std::shared_ptr<typeinfo_t> base_class;
-      // I'm not completely sure if this is signed or not but thats what the
-      // docs say sooooo
-      int64_t offset_flags;
-    };
-    uint32_t vmi_flags;
-    uint32_t vmi_base_count;
-    std::vector<vmi_base_class_t> vmi_base_class_info{};
+    struct vmi_class_type_info {
+      struct vmi_base_class_t {
+        std::shared_ptr<typeinfo_t> base_class;
+        // I'm not completely sure if this is signed or not but thats what the
+        // docs say sooooo
+        int64_t offset_flags;
+      };
+      uint32_t flags;
+      uint32_t base_count;
+      std::vector<vmi_base_class_t> base_class_info{};
+    } vmi_class_ti{};
   };
   struct vtable_member_t {
     std::string name{};
