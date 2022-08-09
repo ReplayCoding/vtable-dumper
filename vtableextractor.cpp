@@ -131,10 +131,12 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
         // long is 32bits wide, but im lazy
         auto offset_flags = get_data_at_offset<uint32_t>(
             addr + ((5 + (i * 2)) * pointer_size_for_binary));
+        auto offset_offset = get_data_at_offset<int32_t>(
+            addr + ((5 + (i * 2)) * pointer_size_for_binary));
         // Lower octet is flags
         base_class_info.offset_flags.flags = offset_flags & 0xff;
         // Rest is offset
-        base_class_info.offset_flags.offset = offset_flags >> 8;
+        base_class_info.offset_flags.offset = offset_offset >> 8;
 
         typeinfo.vmi_class_ti.base_class_info.emplace_back(base_class_info);
       }
@@ -149,34 +151,14 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
   return typeinfo;
 };
 
-VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
-  std::map<uint64_t, vtable_member_t> vtable_members{};
-
-  // Handle offset-to-X ptrs in classes with X-in-Y vtables;
-  // This var is used to fixup the vtable offset.
-  int vtable_offset_from_symbol = pointer_size_for_binary;
-  auto typeinfo_addr = 0;
-  while (true) {
-    typeinfo_addr = get_ptr_at_offset(addr + vtable_offset_from_symbol);
-    vtable_offset_from_symbol += pointer_size_for_binary;
-    if (symbol_map.contains(typeinfo_addr) &&
-        !symbol_map[typeinfo_addr].name().empty() &&
-        fixup_symbol_name(symbol_map[typeinfo_addr].name())
-            .starts_with("_ZTI")) {
-      break;
-    }
-  }
-  auto typeinfo = parse_typeinfo(typeinfo_addr);
-  // fmt::print("typeinfo is at: {:08X}", typeinfo_addr);
-
-  const auto vftable_addr = addr + vtable_offset_from_symbol;
+std::pair<std::vector<VtableExtractor::vtable_member_t>, bool>
+VtableExtractor::get_num_methods_of_vftable(uint64_t vftable_addr) {
   // fmt::print(" ... {:08X}\n", vftable_addr);
 
-  auto vtable_num_of_methods = 0;
+  std::vector<VtableExtractor::vtable_member_t> members{};
   auto current_loop_addr = vftable_addr;
   while (true) {
     auto data_at_offset = get_ptr_at_offset(current_loop_addr);
-    auto current_offset = current_loop_addr - vftable_addr;
 
     // Another vtable has most likely started
     if (symbol_map.contains(current_loop_addr)) {
@@ -201,19 +183,54 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
       break;
     };
 
-    vtable_members[current_offset] = {
-        .name = fixup_symbol_name(symbol),
-    };
-    vtable_num_of_methods++;
     current_loop_addr += pointer_size_for_binary;
+
+    vtable_member_t member{.name = fixup_symbol_name(symbol)};
+    members.emplace_back(member);
   };
+
+  return std::pair(members, false);
+};
+
+std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
+  // Handle offset-to-X ptrs in classes with X-in-Y vtables;
+  // This var is used to fixup the vtable offset.
+  int vtable_offset_from_symbol = addr + pointer_size_for_binary;
+  auto typeinfo_addr = 0;
+  while (true) {
+    typeinfo_addr = get_ptr_at_offset(vtable_offset_from_symbol);
+    vtable_offset_from_symbol += pointer_size_for_binary;
+    if (symbol_map.contains(typeinfo_addr) &&
+        !symbol_map[typeinfo_addr].name().empty() &&
+        fixup_symbol_name(symbol_map[typeinfo_addr].name())
+            .starts_with("_ZTI")) {
+      break;
+    }
+  }
+
+  return std::pair(typeinfo_addr, vtable_offset_from_symbol);
+};
+
+VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
+  std::map<uint64_t, vtable_member_t> vtable_members{};
+
+  auto typeinfo_location = find_typeinfo(addr);
+  auto typeinfo_addr = typeinfo_location.first;
+  auto vtable_offset_from_symbol = typeinfo_location.second;
+  auto typeinfo = parse_typeinfo(typeinfo_addr);
+  // fmt::print("typeinfo is at: {:08X}", typeinfo_addr);
+
+  std::vector<std::vector<vtable_member_t>> vftables{};
+  auto vftable_primary_methods =
+      get_num_methods_of_vftable(vtable_offset_from_symbol);
+  vftables.emplace_back(vftable_primary_methods.first);
+
   return {
       // name is set in get_vtables
       .typeinfo = typeinfo,
       .addr = addr,
       .pointer_size = pointer_size_for_binary,
-      .vtable_num_of_methods = vtable_num_of_methods,
-      .vtable_members = vtable_members,
+      .vftables = vftables,
   };
 };
 
