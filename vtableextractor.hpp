@@ -72,9 +72,9 @@ private:
   vtable_data_t get_vtable(uint64_t addr);
   /* number of members, should we continue? */
   std::pair<std::vector<VtableExtractor::vtable_member_t>, bool>
-  get_num_methods_of_vftable(uint64_t addr);
+  get_methods_of_vftable(uint64_t addr);
   
-  /* typeinfo address, vtable address (right after typeinfo ptr) */
+  /* typeinfo address, vftable address (right after typeinfo ptr) */
   std::pair<uint64_t, uint64_t> find_typeinfo(uint64_t addr);
 
   template <typename T> T get_data_at_offset(uint64_t virtual_addr);
