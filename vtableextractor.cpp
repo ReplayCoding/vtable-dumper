@@ -224,6 +224,21 @@ std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
   return std::pair(typeinfo_addr, vtable_location);
 };
 
+bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(
+    VtableExtractor::typeinfo_t *typeinfo) {
+  if (typeinfo == nullptr) {
+    return false;
+  };
+  if (typeinfo->typeinfo_type ==
+      VtableExtractor::typeinfo_t::VMI_CLASS_TYPE_INFO) {
+    return true;
+  } else if (typeinfo->typeinfo_type ==
+             VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO) {
+    return is_there_a_vmi_in_typeinfo_graph(
+        typeinfo->si_class_ti.base_class.get());
+  };
+  return false;
+};
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
@@ -241,8 +256,7 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
       vftable_location +
       (vftable_primary_methods.first.size() * pointer_size_for_binary);
   bool should_we_continue{vftable_primary_methods.second &&
-                          typeinfo.typeinfo_type ==
-                              typeinfo_t::VMI_CLASS_TYPE_INFO};
+                          is_there_a_vmi_in_typeinfo_graph(&typeinfo)};
   // fmt::print("DBG: {:08X} {:08X} {}\n", addr, current_loop_addr,
   //            should_we_continue);
   while (should_we_continue) {
