@@ -5,7 +5,7 @@
 void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
   fmt::print(prefix + "type: {}\n",
              typeinfo_type_lookup[typeinfo.typeinfo_type]);
-  fmt::print(prefix + "name: {}\n", typeinfo.name);
+  fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
   switch (typeinfo.typeinfo_type) {
     case VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO: {
       if (typeinfo.si_class_ti.base_class) {
@@ -33,6 +33,9 @@ void print_typeinfo(VtableExtractor::typeinfo_t typeinfo, std::string prefix) {
   };
 };
 
+std::string eighty_cols =
+    "-----------------------------------------------------------"
+    "---------------------";
 int main(int argc, const char **argv) {
   if (argc != 2) {
     fmt::print("usage: {} <binary>\n", argv[0]);
@@ -42,20 +45,18 @@ int main(int argc, const char **argv) {
   auto vtables = VtableExtractor(*binary).get_vtables();
 
   for (auto vtable : vtables) {
-    fmt::print("{} = {:#08x}\n", vtable.typeinfo.name, vtable.addr);
+    fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
 
     fmt::print("\ttypeinfo:\n");
     print_typeinfo(vtable.typeinfo, "\t\t");
 
     fmt::print("\tnumber of vftables: {}\n", vtable.vftables.size());
     for (const auto &vftable : vtable.vftables) {
-      fmt::print("-------------------------------------------------------------"
-                 "-------------------\n");
+      fmt::print(eighty_cols + " VFTABLE \n");
       for (const auto &member : vftable) {
         fmt::print("\t{} is at offset {} (member# {})\n", member.name, 0, 0);
       };
     };
-    fmt::print("\n\n--------------------------------------NEXT "
-               "VTABLE-------------------------------\n\n");
+    fmt::print("\n\n" + eighty_cols + " NEXT VTABLE \n\n");
   }
 };

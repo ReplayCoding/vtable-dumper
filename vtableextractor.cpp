@@ -152,10 +152,12 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 };
 
 std::pair<std::vector<VtableExtractor::vtable_member_t>, bool>
-VtableExtractor::get_num_methods_of_vftable(uint64_t vftable_addr) {
+VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
   // fmt::print(" ... {:08X}\n", vftable_addr);
 
   std::vector<VtableExtractor::vtable_member_t> members{};
+  bool should_we_continue = false;
+
   auto current_loop_addr = vftable_addr;
   while (true) {
     auto data_at_offset = get_ptr_at_offset(current_loop_addr);
@@ -164,6 +166,7 @@ VtableExtractor::get_num_methods_of_vftable(uint64_t vftable_addr) {
     if (symbol_map.contains(current_loop_addr)) {
       // fmt::print("Skipping because of symbol {}",
       // symbol_map[vtable_addr].name());
+      should_we_continue = false;
       break;
     };
 
@@ -171,15 +174,18 @@ VtableExtractor::get_num_methods_of_vftable(uint64_t vftable_addr) {
 
     // Could be a __cxa_pure_virtual binding, or just padding.
     if (data_at_offset == 0) {
-      if (binding_map.contains(current_loop_addr))
+      if (binding_map.contains(current_loop_addr)) {
         symbol = binding_map[current_loop_addr].name();
-      else
+      } else {
+        should_we_continue = true;
         break;
+      };
     };
 
     // Could be a relocated weird magic thingy so there hopefully wont be symbol
     // FIXME!
     if (symbol.empty()) {
+      should_we_continue = true;
       break;
     };
 
@@ -189,17 +195,24 @@ VtableExtractor::get_num_methods_of_vftable(uint64_t vftable_addr) {
     members.emplace_back(member);
   };
 
-  return std::pair(members, false);
+  return std::pair(members, should_we_continue);
 };
 
 std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
   // Handle offset-to-X ptrs in classes with X-in-Y vtables;
   // This var is used to fixup the vtable offset.
-  int vtable_offset_from_symbol = addr + pointer_size_for_binary;
+  int vtable_location = addr + pointer_size_for_binary;
   auto typeinfo_addr = 0;
   while (true) {
-    typeinfo_addr = get_ptr_at_offset(vtable_offset_from_symbol);
-    vtable_offset_from_symbol += pointer_size_for_binary;
+    // TODO: fix a terrible edge case
+    // Basically avoid a case where we misread typeinfo as a part of the
+    // vftables because of padding fucking with the checks
+    if (symbol_map.contains(vtable_location)) {
+      throw StringError(fmt::format("Stupid fucking edge case happened at {}",
+                                    vtable_location));
+    };
+    typeinfo_addr = get_ptr_at_offset(vtable_location);
+    vtable_location += pointer_size_for_binary;
     if (symbol_map.contains(typeinfo_addr) &&
         !symbol_map[typeinfo_addr].name().empty() &&
         fixup_symbol_name(symbol_map[typeinfo_addr].name())
@@ -208,7 +221,7 @@ std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
     }
   }
 
-  return std::pair(typeinfo_addr, vtable_offset_from_symbol);
+  return std::pair(typeinfo_addr, vtable_location);
 };
 
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
@@ -216,17 +229,38 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
 
   auto typeinfo_location = find_typeinfo(addr);
   auto typeinfo_addr = typeinfo_location.first;
-  auto vtable_offset_from_symbol = typeinfo_location.second;
+  auto vftable_location = typeinfo_location.second;
   auto typeinfo = parse_typeinfo(typeinfo_addr);
   // fmt::print("typeinfo is at: {:08X}", typeinfo_addr);
 
   std::vector<std::vector<vtable_member_t>> vftables{};
-  auto vftable_primary_methods =
-      get_num_methods_of_vftable(vtable_offset_from_symbol);
+  const auto vftable_primary_methods = get_methods_of_vftable(vftable_location);
   vftables.emplace_back(vftable_primary_methods.first);
 
+  uint64_t current_loop_addr =
+      vftable_location +
+      (vftable_primary_methods.first.size() * pointer_size_for_binary);
+  bool should_we_continue{vftable_primary_methods.second &&
+                          typeinfo.typeinfo_type ==
+                              typeinfo_t::VMI_CLASS_TYPE_INFO};
+  // fmt::print("DBG: {:08X} {:08X} {}\n", addr, current_loop_addr,
+  //            should_we_continue);
+  while (should_we_continue) {
+    try {
+      auto typeinfo_location = find_typeinfo(current_loop_addr);
+      auto vftable_location = typeinfo_location.second;
+
+      const auto vftable_methods = get_methods_of_vftable(vftable_location);
+      vftables.emplace_back(vftable_methods.first);
+      current_loop_addr = vftable_location + (vftable_methods.first.size() *
+                                              pointer_size_for_binary);
+      should_we_continue = vftable_methods.second;
+    } catch (std::exception &_) {
+      should_we_continue = false;
+    };
+  };
+
   return {
-      // name is set in get_vtables
       .typeinfo = typeinfo,
       .addr = addr,
       .pointer_size = pointer_size_for_binary,
