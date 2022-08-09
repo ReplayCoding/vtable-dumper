@@ -47,11 +47,15 @@ int main(int argc, const char **argv) {
     fmt::print("\ttypeinfo:\n");
     print_typeinfo(vtable.typeinfo, "\t\t");
 
-    fmt::print("\tnumber of vtable methods: {}\n",
-               vtable.vtable_num_of_methods);
-    for (const auto &[offset, member] : vtable.vtable_members) {
-      fmt::print("\t{} is at offset {} (member# {})\n", member.name, offset,
-                 offset / vtable.pointer_size);
+    fmt::print("\tnumber of vftables: {}\n", vtable.vftables.size());
+    for (const auto &vftable : vtable.vftables) {
+      fmt::print("-------------------------------------------------------------"
+                 "-------------------\n");
+      for (const auto &member : vftable) {
+        fmt::print("\t{} is at offset {} (member# {})\n", member.name, 0, 0);
+      };
     };
+    fmt::print("\n\n--------------------------------------NEXT "
+               "VTABLE-------------------------------\n\n");
   }
 };
