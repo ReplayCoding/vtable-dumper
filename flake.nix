@@ -18,7 +18,7 @@
         name = "shell";
         SYSTEMD_DEBUGGER = "lldb";
         nativeBuildInputs = with pkgs; [meson pkg-config ninja lldb];
-        buildInputs = with pkgs; [lief fmt];
+        buildInputs = with pkgs; [lief fmt nlohmann_json];
       };
     });
 }

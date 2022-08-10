@@ -45,7 +45,7 @@ public:
       };
       uint32_t flags;
       uint32_t base_count;
-      std::vector<vmi_base_class_t> base_class_info{};
+      std::vector<vmi_base_class_t> base_classes_info{};
     } vmi_class_ti{};
   };
   struct vtable_member_t {
