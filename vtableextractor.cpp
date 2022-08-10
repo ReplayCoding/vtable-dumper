@@ -138,7 +138,7 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
         // Rest is offset
         base_class_info.offset_flags.offset = offset_offset >> 8;
 
-        typeinfo.vmi_class_ti.base_class_info.emplace_back(base_class_info);
+        typeinfo.vmi_class_ti.base_classes_info.emplace_back(base_class_info);
       }
       typeinfo.vmi_class_ti.flags = flags;
       typeinfo.vmi_class_ti.base_count = base_count;
