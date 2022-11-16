@@ -113,8 +113,9 @@ void generate_cli_output(std::vector<VtableExtractor::vtable_data_t> vtables) {
     fmt::print("\tnumber of vftables: {}\n", vtable.vftables.size());
     for (const auto &vftable : vtable.vftables) {
       fmt::print(eighty_cols + " VFTABLE \n");
-      for (const auto &member : vftable) {
-        fmt::print("\t{} is at offset {} (member# {})\n", member.name, 0, 0);
+      for (size_t i = 0; i < vftable.size(); i++) {
+        auto member = vftable[i];
+        fmt::print("\t{} is at offset {:X} (member# {})\n", member.name, i * vtable.pointer_size, i);
       };
     };
     fmt::print("\n\n" + eighty_cols + " NEXT VTABLE \n\n");
@@ -128,6 +129,6 @@ int main(int argc, const char **argv) {
   };
   auto binary = LIEF::Parser::parse(argv[1]);
   auto vtables = VtableExtractor(*binary).get_vtables();
-  std::cout << generate_json_output(vtables);
-  // generate_cli_output(vtables);
+  // std::cout << generate_json_output(vtables);
+  generate_cli_output(vtables);
 };
