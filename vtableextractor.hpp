@@ -1,4 +1,5 @@
 #include <LIEF/LIEF.hpp>
+#include <fmt/core.h>
 #include <memory>
 #include <stdint.h>
 
@@ -7,12 +8,18 @@ static std::array<std::string, 3> typeinfo_type_lookup = {
 
 class StringError : public std::exception {
 public:
-  StringError(std::string s) : s(s){};
-  virtual const char *what() const noexcept override { return s.c_str(); };
+  StringError(const std::string &message) : message(message){};
+
+  template <typename... T> StringError(const std::string &format, T... Args) {
+    message = fmt::format(format, Args...);
+  }
+
+  const char *what() const noexcept override { return message.c_str(); };
 
 private:
-  std::string s;
+  std::string message;
 };
+
 class VtableExtractor {
 public:
   VtableExtractor(LIEF::Binary &binary);

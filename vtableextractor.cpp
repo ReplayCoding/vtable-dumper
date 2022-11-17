@@ -54,7 +54,7 @@ void VtableExtractor::generate_binding_map() {
       break;
     };
     default: {
-      throw StringError("Unkown binary format");
+      throw StringError("Unknown binary format: {}", binary.format());
       break;
     };
   };
@@ -73,7 +73,7 @@ std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
       break;
     }
     default: {
-      throw StringError("Unknown binary format");
+      throw StringError("Unknown binary format: {}", binary.format());
       break;
     }
   };
