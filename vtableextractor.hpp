@@ -1,24 +1,11 @@
+#include "error.hpp"
 #include <LIEF/LIEF.hpp>
 #include <fmt/core.h>
 #include <memory>
 #include <stdint.h>
 
-static std::array<std::string, 3> typeinfo_type_lookup = {
+static std::array<std::string_view, 3> typeinfo_type_lookup = {
     "CLASS_TYPE_INFO", "SI_CLASS_TYPE_INFO", "VMI_CLASS_TYPE_INFO"};
-
-class StringError : public std::exception {
-public:
-  StringError(const std::string &message) : message(message){};
-
-  template <typename... T> StringError(const std::string &format, T... Args) {
-    message = fmt::format(format, Args...);
-  }
-
-  const char *what() const noexcept override { return message.c_str(); };
-
-private:
-  std::string message;
-};
 
 class VtableExtractor {
 public:

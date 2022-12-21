@@ -1,4 +1,5 @@
 #include "vtableextractor.hpp"
+#include "error.hpp"
 #include <fmt/core.h>
 
 // later

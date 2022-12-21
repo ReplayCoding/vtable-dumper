@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.11)
+project(vtable_dumper)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+ add_compile_options (-fdiagnostics-color=always)
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+ add_compile_options (-fcolor-diagnostics)
+endif ()
+
+find_package(PkgConfig)
+find_package(LIEF REQUIRED)
+find_package(fmt REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+add_executable(vtable_dumper main.cpp vtableextractor.cpp)
+target_compile_features(vtable_dumper PRIVATE cxx_std_20)
+target_link_libraries(vtable_dumper PRIVATE LIEF::LIEF fmt::fmt nlohmann_json::nlohmann_json)
