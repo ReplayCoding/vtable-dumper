@@ -45,7 +45,8 @@ json generate_json_from_typeinfo(const VtableExtractor::typeinfo_t typeinfo) {
   return typeinfo_obj;
 };
 
-json generate_json_output(std::vector<VtableExtractor::vtable_data_t> vtables) {
+json generate_json_output(
+    std::vector<VtableExtractor::vtable_data_t> &vtables) {
   json vtables_array = json::array();
   for (const auto &vtable : vtables) {
     json vtable_obj;
@@ -67,7 +68,7 @@ json generate_json_output(std::vector<VtableExtractor::vtable_data_t> vtables) {
   return vtables_array;
 };
 
-void cli_print_typeinfo(VtableExtractor::typeinfo_t typeinfo,
+void cli_print_typeinfo(const VtableExtractor::typeinfo_t &typeinfo,
                         std::string prefix) {
   fmt::print(prefix + "type: {}\n",
              typeinfo_type_lookup[typeinfo.typeinfo_type]);
@@ -103,8 +104,8 @@ std::string eighty_cols =
     "-----------------------------------------------------------"
     "---------------------";
 
-void generate_cli_output(std::vector<VtableExtractor::vtable_data_t> vtables) {
-  for (auto vtable : vtables) {
+void generate_cli_output(std::vector<VtableExtractor::vtable_data_t> &vtables) {
+  for (const auto &vtable : vtables) {
     fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
 
     fmt::print("\ttypeinfo:\n");
@@ -115,7 +116,8 @@ void generate_cli_output(std::vector<VtableExtractor::vtable_data_t> vtables) {
       fmt::print(eighty_cols + " VFTABLE \n");
       for (size_t i = 0; i < vftable.size(); i++) {
         auto member = vftable[i];
-        fmt::print("\t{} is at offset {:X} (member# {})\n", member.name, i * vtable.pointer_size, i);
+        fmt::print("\t{} is at offset {:X} (member# {})\n", member.name,
+                   i * vtable.pointer_size, i);
       };
     };
     fmt::print("\n\n" + eighty_cols + " NEXT VTABLE \n\n");
