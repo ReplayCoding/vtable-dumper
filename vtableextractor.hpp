@@ -3,30 +3,19 @@
 #include <fmt/core.h>
 #include <memory>
 #include <stdint.h>
-
-static std::array<std::string_view, 3> typeinfo_type_lookup = {
-    "CLASS_TYPE_INFO", "SI_CLASS_TYPE_INFO", "VMI_CLASS_TYPE_INFO"};
+#include <string_view>
+#include <variant>
 
 class VtableExtractor {
 public:
   VtableExtractor(LIEF::Binary &binary);
   struct typeinfo_t {
-    typeinfo_t(){};
-    ~typeinfo_t(){};
+    struct class_type_info {};
 
-    enum typeinfo_type_t {
-      CLASS_TYPE_INFO = 0,
-      SI_CLASS_TYPE_INFO,
-      VMI_CLASS_TYPE_INFO,
-    } typeinfo_type;
-    std::string name;
-
-    // __si_class_type_info
     struct si_class_type_info {
       std::shared_ptr<typeinfo_t> base_class;
-    } si_class_ti{};
+    };
 
-    // __vmi_class_type_info
     struct vmi_class_type_info {
       struct vmi_base_class_t {
         std::shared_ptr<typeinfo_t> base_class;
@@ -40,8 +29,12 @@ public:
       uint32_t flags;
       uint32_t base_count;
       std::vector<vmi_base_class_t> base_classes_info{};
-    } vmi_class_ti{};
+    };
+
+    std::string name;
+    std::variant<class_type_info, si_class_type_info, vmi_class_type_info> ti;
   };
+
   struct vtable_member_t {
     std::string name{};
   };
@@ -88,3 +81,18 @@ private:
   LIEF::Binary &binary;
   int pointer_size_for_binary;
 };
+
+inline std::string_view
+get_typeinfo_type_name(const VtableExtractor::typeinfo_t &t) {
+  if (std::holds_alternative<VtableExtractor::typeinfo_t::class_type_info>(t.ti)) {
+    return "CLASS_TYPE_INFO";
+  } else if (std::holds_alternative<
+                 VtableExtractor::typeinfo_t::si_class_type_info>(t.ti)) {
+    return "SI_CLASS_TYPE_INFO";
+  } else if (std::holds_alternative<
+                 VtableExtractor::typeinfo_t::vmi_class_type_info>(t.ti)) {
+    return "VMI_CLASS_TYPE_INFO";
+  }
+
+  return "UNKNOWN";
+}

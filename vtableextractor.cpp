@@ -1,6 +1,7 @@
 #include "vtableextractor.hpp"
 #include "error.hpp"
 #include <fmt/core.h>
+#include <variant>
 
 // later
 // bool do_we_swap_endianness(const LIEF::Binary *binary){};
@@ -101,70 +102,59 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 
   if (typeinfo_classinfo_name.find("__si_class_type_info") !=
       std::string::npos) {
-    typeinfo.typeinfo_type = typeinfo_t::SI_CLASS_TYPE_INFO;
+    auto typeinfo_addr =
+        get_ptr_at_offset(addr + (2 * pointer_size_for_binary));
+
+    if (typeinfo_addr != 0) {
+      auto base_typeinfo = parse_typeinfo(typeinfo_addr);
+      typeinfo.ti = typeinfo_t::si_class_type_info{
+          .base_class = std::make_shared<typeinfo_t>(base_typeinfo)};
+    };
   } else if (typeinfo_classinfo_name.find("__vmi_class_type_info") !=
              std::string::npos) {
-    typeinfo.typeinfo_type = typeinfo_t::VMI_CLASS_TYPE_INFO;
-  } else {
-    typeinfo.typeinfo_type = typeinfo_t::CLASS_TYPE_INFO;
-  }
+    auto flags =
+        get_data_at_offset<uint32_t>(addr + (2 * pointer_size_for_binary));
+    auto base_count =
+        get_data_at_offset<uint32_t>(addr + (3 * pointer_size_for_binary));
 
-  switch (typeinfo.typeinfo_type) {
-    case typeinfo_t::SI_CLASS_TYPE_INFO: {
-      auto typeinfo_addr =
-          get_ptr_at_offset(addr + (2 * pointer_size_for_binary));
+    std::vector<typeinfo_t::vmi_class_type_info::vmi_base_class_t>
+        base_classes_info{};
+    for (uint32_t i = 0; i < base_count; i++) {
+      typeinfo_t::vmi_class_type_info::vmi_base_class_t base_class_info{};
+      try {
+        // It could be located in a different lib, we will catch the error in
+        // this case.
+        auto base_class = parse_typeinfo(get_ptr_at_offset(
+            addr + ((4 + (i * 2)) * pointer_size_for_binary)));
 
-      if (typeinfo_addr != 0) {
-        auto base_typeinfo = parse_typeinfo(typeinfo_addr);
-        typeinfo.si_class_ti.base_class =
-            std::make_shared<typeinfo_t>(base_typeinfo);
+        base_class_info.base_class = std::make_shared<typeinfo_t>(base_class);
+      } catch (std::exception &e) {
+        base_class_info.base_class = nullptr;
       };
-      break;
-    };
 
-    case typeinfo_t::VMI_CLASS_TYPE_INFO: {
-      auto flags =
-          get_data_at_offset<uint32_t>(addr + (2 * pointer_size_for_binary));
-      auto base_count =
-          get_data_at_offset<uint32_t>(addr + (3 * pointer_size_for_binary));
+      // FIXME: This isn't compatible with X86-64 because this assumes that
+      // long is 32bits wide, but im lazy
+      auto offset_flags = get_data_at_offset<uint32_t>(
+          addr + ((5 + (i * 2)) * pointer_size_for_binary));
+      auto offset_offset = get_data_at_offset<int32_t>(
+          addr + ((5 + (i * 2)) * pointer_size_for_binary));
 
-      for (uint32_t i = 0; i < base_count; i++) {
-        typeinfo_t::vmi_class_type_info::vmi_base_class_t base_class_info{};
-        try {
-          // It could be located in a different lib, we will catch the error in
-          // this case.
-          auto base_class = parse_typeinfo(get_ptr_at_offset(
-              addr + ((4 + (i * 2)) * pointer_size_for_binary)));
+      // Lower octet is flags
+      base_class_info.offset_flags.flags = offset_flags & 0xff;
+      // Rest is offset
+      base_class_info.offset_flags.offset = offset_offset >> 8;
 
-          base_class_info.base_class = std::make_shared<typeinfo_t>(base_class);
-        } catch (std::exception &e) {
-          base_class_info.base_class = nullptr;
-        };
+      base_classes_info.emplace_back(base_class_info);
+    }
 
-        // FIXME: This isn't compatible with X86-64 because this assumes that
-        // long is 32bits wide, but im lazy
-        auto offset_flags = get_data_at_offset<uint32_t>(
-            addr + ((5 + (i * 2)) * pointer_size_for_binary));
-        auto offset_offset = get_data_at_offset<int32_t>(
-            addr + ((5 + (i * 2)) * pointer_size_for_binary));
-
-        // Lower octet is flags
-        base_class_info.offset_flags.flags = offset_flags & 0xff;
-        // Rest is offset
-        base_class_info.offset_flags.offset = offset_offset >> 8;
-
-        typeinfo.vmi_class_ti.base_classes_info.emplace_back(base_class_info);
-      }
-
-      typeinfo.vmi_class_ti.flags = flags;
-      typeinfo.vmi_class_ti.base_count = base_count;
-      break /* a leg */;
-    };
-
-    default: {
-      break;
-    };
-  };
+    typeinfo.ti =
+        typeinfo_t::vmi_class_type_info{.flags = flags,
+                                        .base_count = base_count,
+                                        .base_classes_info = base_classes_info};
+  } else {
+    // class_type_info
+    typeinfo.ti = typeinfo_t::class_type_info{};
+  }
 
   return typeinfo;
 };
@@ -250,13 +240,11 @@ bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(
     return false;
   };
 
-  if (typeinfo->typeinfo_type ==
-      VtableExtractor::typeinfo_t::VMI_CLASS_TYPE_INFO) {
+  if (std::holds_alternative<typeinfo_t::vmi_class_type_info>(typeinfo->ti)) {
     return true;
-  } else if (typeinfo->typeinfo_type ==
-             VtableExtractor::typeinfo_t::SI_CLASS_TYPE_INFO) {
-    return is_there_a_vmi_in_typeinfo_graph(
-        typeinfo->si_class_ti.base_class.get());
+  } else if (auto ti =
+                 std::get_if<typeinfo_t::si_class_type_info>(&typeinfo->ti)) {
+    return is_there_a_vmi_in_typeinfo_graph(ti->base_class.get());
   };
 
   return false;
