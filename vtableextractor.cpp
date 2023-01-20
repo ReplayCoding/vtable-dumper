@@ -83,11 +83,8 @@ std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
       const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
       const auto section = binary_macho->section_from_virtual_address(addr);
       const auto section_content = section->content().data();
-      const auto string_content_unconverted =
-          &(section_content[addr - section->virtual_address()]);
-
-      return std::string(
-          reinterpret_cast<const char *>(string_content_unconverted));
+      return std::string(reinterpret_cast<const char *>(
+          &(section_content[addr - section->virtual_address()])));
       break;
     }
 
@@ -102,19 +99,16 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 
   auto typeinfo_type = binding_map.at(addr).name();
   if (typeinfo_type == "") {
-    throw StringError(fmt::format(
+    throw StringError(
         "There should be a typeinfo class symbol here. Address is {:08X}",
-        addr));
+        addr);
   }
 
-  auto class_name = get_typeinfo_name(
+  typeinfo.name = get_typeinfo_name(
       get_ptr_at_offset(binary, addr + pointer_size_for_binary));
   auto typeinfo_classinfo_name = fixup_symbol_name(binary, typeinfo_type);
 
-  typeinfo.name = class_name;
-
-  if (typeinfo_classinfo_name.find("__si_class_type_info") !=
-      std::string::npos) {
+  if (typeinfo_classinfo_name.ends_with("__si_class_type_infoE")) {
     auto typeinfo_addr =
         get_ptr_at_offset(binary, addr + (2 * pointer_size_for_binary));
 
@@ -123,8 +117,7 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
       typeinfo.ti = typeinfo_t::si_class_type_info{
           .base_class = std::make_shared<typeinfo_t>(base_typeinfo)};
     };
-  } else if (typeinfo_classinfo_name.find("__vmi_class_type_info") !=
-             std::string::npos) {
+  } else if (typeinfo_classinfo_name.ends_with("__vmi_class_type_infoE")) {
     auto flags = get_data_at_offset<uint32_t>(
         binary, addr + (2 * pointer_size_for_binary));
     auto base_count = get_data_at_offset<uint32_t>(
@@ -233,8 +226,8 @@ std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
     // Basically avoid a case where we misread typeinfo as a part of the
     // vftables because of padding fucking with the checks
     if (symbol_map.contains(vtable_location)) {
-      throw StringError(fmt::format("Stupid fucking edge case happened at {}",
-                                    vtable_location));
+      throw StringError("Stupid fucking edge case happened at {}",
+                        vtable_location);
     };
 
     typeinfo_addr = get_ptr_at_offset(binary, vtable_location);
