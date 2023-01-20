@@ -50,8 +50,6 @@ public:
   std::vector<vtable_data_t> get_vtables();
 
 private:
-  int get_pointer_size_for_bin();
-  std::string fixup_symbol_name(std::string name);
   void generate_symbol_map();
   void generate_binding_map();
   std::string get_typeinfo_name(uint64_t name);
@@ -64,17 +62,6 @@ private:
   /* typeinfo address, vftable address (right after typeinfo ptr) */
   std::pair<uint64_t, uint64_t> find_typeinfo(uint64_t addr);
   bool is_there_a_vmi_in_typeinfo_graph(typeinfo_t *typeinfo);
-
-  template <typename T> T get_data_at_offset(uint64_t virtual_addr);
-  inline uint64_t get_ptr_at_offset(uint64_t virtual_addr) {
-    if (pointer_size_for_binary == 4) {
-      return get_data_at_offset<uint32_t>(virtual_addr);
-    } else if (pointer_size_for_binary == 8) {
-      return get_data_at_offset<uint64_t>(virtual_addr);
-    } else {
-      throw StringError("No valid pointer size for binary");
-    };
-  };
 
   std::map<uint64_t, LIEF::Symbol> symbol_map{};
   std::map<uint64_t, LIEF::Symbol> binding_map{};
