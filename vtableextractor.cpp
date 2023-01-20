@@ -50,33 +50,6 @@ std::string fixup_symbol_name(const LIEF::Binary &binary, std::string name) {
   return name;
 };
 
-void VtableExtractor::generate_symbol_map() {
-  for (const auto &symbol : binary.symbols()) {
-    const auto virtual_addr = binary.offset_to_virtual_address(symbol.value());
-
-    symbol_map[virtual_addr] = symbol;
-  };
-};
-
-void VtableExtractor::generate_binding_map() {
-  switch (binary.format()) {
-    case LIEF::FORMAT_MACHO: {
-      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
-      const auto dyld_info = binary_macho->dyld_info();
-
-      for (const auto &binding_info : dyld_info->bindings()) {
-        binding_map[binding_info.address()] = *binding_info.symbol();
-      };
-      break;
-    };
-
-    default: {
-      throw StringError("Unknown binary format: {}", binary.format());
-      break;
-    };
-  };
-};
-
 std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
   switch (binary.format()) {
     case LIEF::FORMAT_MACHO: {
@@ -259,6 +232,7 @@ bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(
 
   return false;
 };
+
 VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   std::map<uint64_t, vtable_member_t> vtable_members{};
 
@@ -314,6 +288,33 @@ std::vector<VtableExtractor::vtable_data_t> VtableExtractor::get_vtables() {
     };
   };
   return vtables;
+};
+
+void VtableExtractor::generate_symbol_map() {
+  for (const auto &symbol : binary.symbols()) {
+    const auto virtual_addr = binary.offset_to_virtual_address(symbol.value());
+
+    symbol_map[virtual_addr] = symbol;
+  };
+};
+
+void VtableExtractor::generate_binding_map() {
+  switch (binary.format()) {
+    case LIEF::FORMAT_MACHO: {
+      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
+      const auto dyld_info = binary_macho->dyld_info();
+
+      for (const auto &binding_info : dyld_info->bindings()) {
+        binding_map[binding_info.address()] = *binding_info.symbol();
+      };
+      break;
+    };
+
+    default: {
+      throw StringError("Unknown binary format: {}", binary.format());
+      break;
+    };
+  };
 };
 
 VtableExtractor::VtableExtractor(LIEF::Binary &binary) : binary(binary) {
