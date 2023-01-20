@@ -67,8 +67,9 @@ std::string VtableExtractor::get_typeinfo_name(uint64_t addr) {
     }
   };
 };
-VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
-  typeinfo_t typeinfo{};
+
+Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
+  Typeinfo typeinfo{};
 
   auto typeinfo_type = binding_map.at(addr).name();
   if (typeinfo_type == "") {
@@ -87,8 +88,8 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
 
     if (typeinfo_addr != 0) {
       auto base_typeinfo = parse_typeinfo(typeinfo_addr);
-      typeinfo.ti = typeinfo_t::si_class_type_info{
-          .base_class = std::make_shared<typeinfo_t>(base_typeinfo)};
+      typeinfo.ti = Typeinfo::si_class_type_info{
+          .base_class = std::make_shared<Typeinfo>(base_typeinfo)};
     };
   } else if (typeinfo_classinfo_name.ends_with("__vmi_class_type_infoE")) {
     auto flags = get_data_at_offset<uint32_t>(
@@ -96,17 +97,17 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
     auto base_count = get_data_at_offset<uint32_t>(
         binary, addr + (3 * pointer_size_for_binary));
 
-    std::vector<typeinfo_t::vmi_class_type_info::vmi_base_class_t>
+    std::vector<Typeinfo::vmi_class_type_info::vmi_base_class_t>
         base_classes_info{};
     for (uint32_t i = 0; i < base_count; i++) {
-      typeinfo_t::vmi_class_type_info::vmi_base_class_t base_class_info{};
+      Typeinfo::vmi_class_type_info::vmi_base_class_t base_class_info{};
       try {
         // It could be located in a different lib, we will catch the error in
         // this case.
         auto base_class = parse_typeinfo(get_ptr_at_offset(
             binary, addr + ((4 + (i * 2)) * pointer_size_for_binary)));
 
-        base_class_info.base_class = std::make_shared<typeinfo_t>(base_class);
+        base_class_info.base_class = std::make_shared<Typeinfo>(base_class);
       } catch (std::exception &e) {
         base_class_info.base_class = nullptr;
       };
@@ -127,22 +128,22 @@ VtableExtractor::typeinfo_t VtableExtractor::parse_typeinfo(uint64_t addr) {
     }
 
     typeinfo.ti =
-        typeinfo_t::vmi_class_type_info{.flags = flags,
+        Typeinfo::vmi_class_type_info{.flags = flags,
                                         .base_count = base_count,
                                         .base_classes_info = base_classes_info};
   } else {
     // class_type_info
-    typeinfo.ti = typeinfo_t::class_type_info{};
+    typeinfo.ti = Typeinfo::class_type_info{};
   }
 
   return typeinfo;
 };
 
-std::pair<std::vector<VtableExtractor::vtable_member_t>, bool>
+std::pair<std::vector<VtableMember>, bool>
 VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
   // fmt::print(" ... {:08X}\n", vftable_addr);
 
-  std::vector<VtableExtractor::vtable_member_t> members{};
+  std::vector<VtableMember> members{};
   bool should_we_continue = false;
 
   auto current_loop_addr = vftable_addr;
@@ -178,7 +179,7 @@ VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
     if (symbol) {
       current_loop_addr += pointer_size_for_binary;
 
-      vtable_member_t member{.name = fixup_symbol_name(binary, symbol.value())};
+      VtableMember member{.name = fixup_symbol_name(binary, symbol.value())};
       members.emplace_back(member);
     } else {
       should_we_continue = true;
@@ -217,29 +218,28 @@ std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
   return std::pair(typeinfo_addr, vtable_location);
 };
 
-bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(
-    VtableExtractor::typeinfo_t *typeinfo) {
+bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(Typeinfo *typeinfo) {
   if (typeinfo == nullptr) {
     return false;
   };
 
-  if (std::holds_alternative<typeinfo_t::vmi_class_type_info>(typeinfo->ti)) {
+  if (std::holds_alternative<Typeinfo::vmi_class_type_info>(typeinfo->ti)) {
     return true;
   } else if (auto ti =
-                 std::get_if<typeinfo_t::si_class_type_info>(&typeinfo->ti)) {
+                 std::get_if<Typeinfo::si_class_type_info>(&typeinfo->ti)) {
     return is_there_a_vmi_in_typeinfo_graph(ti->base_class.get());
   };
 
   return false;
 };
 
-VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
-  std::map<uint64_t, vtable_member_t> vtable_members{};
+VtableData VtableExtractor::get_vtable(uint64_t addr) {
+  std::map<uint64_t, VtableMember> vtable_members{};
 
   auto [typeinfo_addr, vftable_location] = find_typeinfo(addr);
   auto typeinfo = parse_typeinfo(typeinfo_addr);
   // fmt::print("typeinfo is at: {:08X}", typeinfo_addr);
-  std::vector<std::vector<vtable_member_t>> vftables{};
+  std::vector<std::vector<VtableMember>> vftables{};
 
   const auto [vftable_primary_methods, do_continue] =
       get_methods_of_vftable(vftable_location);
@@ -276,8 +276,8 @@ VtableExtractor::vtable_data_t VtableExtractor::get_vtable(uint64_t addr) {
   };
 };
 
-std::vector<VtableExtractor::vtable_data_t> VtableExtractor::get_vtables() {
-  std::vector<VtableExtractor::vtable_data_t> vtables{};
+std::vector<VtableData> VtableExtractor::get_vtables() {
+  std::vector<VtableData> vtables{};
 
   for (const auto &[addr, symbol] : symbol_map) {
     const auto name = fixup_symbol_name(binary, symbol.name());

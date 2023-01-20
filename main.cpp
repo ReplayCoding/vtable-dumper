@@ -6,20 +6,18 @@
 
 using json = nlohmann::json;
 
-json generate_json_from_typeinfo(const VtableExtractor::typeinfo_t typeinfo) {
+json generate_json_from_typeinfo(const Typeinfo typeinfo) {
   json typeinfo_obj;
   typeinfo_obj["name"] = typeinfo.name;
   typeinfo_obj["type"] = get_typeinfo_type_name(typeinfo);
 
-  if (auto *ti = std::get_if<VtableExtractor::typeinfo_t::si_class_type_info>(
-          &typeinfo.ti)) {
+  if (auto *ti = std::get_if<Typeinfo::si_class_type_info>(&typeinfo.ti)) {
     const auto base_class = ti->base_class;
     if (base_class != nullptr) {
       typeinfo_obj["base_class"] = generate_json_from_typeinfo(*base_class);
     };
   } else if (auto *ti =
-                 std::get_if<VtableExtractor::typeinfo_t::vmi_class_type_info>(
-                     &typeinfo.ti)) {
+                 std::get_if<Typeinfo::vmi_class_type_info>(&typeinfo.ti)) {
 
     typeinfo_obj["flags"] = ti->flags;
     typeinfo_obj["base_count"] = ti->base_count;
@@ -42,8 +40,7 @@ json generate_json_from_typeinfo(const VtableExtractor::typeinfo_t typeinfo) {
   return typeinfo_obj;
 };
 
-json generate_json_output(
-    std::vector<VtableExtractor::vtable_data_t> &vtables) {
+json generate_json_output(std::vector<VtableData> &vtables) {
   json vtables_array = json::array();
   for (const auto &vtable : vtables) {
     json vtable_obj;
@@ -65,20 +62,17 @@ json generate_json_output(
   return vtables_array;
 };
 
-void cli_print_typeinfo(const VtableExtractor::typeinfo_t &typeinfo,
-                        std::string prefix) {
+void cli_print_typeinfo(const Typeinfo &typeinfo, std::string prefix) {
   fmt::print(prefix + "type: {}\n", get_typeinfo_type_name(typeinfo));
   fmt::print(prefix + "name: {}\n", "_Z" + typeinfo.name);
-  if (auto *ti = std::get_if<VtableExtractor::typeinfo_t::si_class_type_info>(
-          &typeinfo.ti)) {
+  if (auto *ti = std::get_if<Typeinfo::si_class_type_info>(&typeinfo.ti)) {
     if (ti->base_class) {
       cli_print_typeinfo(*ti->base_class, prefix + "\t");
     };
   }
 
   else if (auto *ti =
-               std::get_if<VtableExtractor::typeinfo_t::vmi_class_type_info>(
-                   &typeinfo.ti)) {
+               std::get_if<Typeinfo::vmi_class_type_info>(&typeinfo.ti)) {
     fmt::print(prefix + "flags: {:08X}\n", ti->flags);
     fmt::print(prefix + "base_count: {}\n", ti->base_count);
     for (auto &vmi_base_class : ti->base_classes_info) {
@@ -98,7 +92,7 @@ std::string eighty_cols =
     "-----------------------------------------------------------"
     "---------------------";
 
-void generate_cli_output(std::vector<VtableExtractor::vtable_data_t> &vtables) {
+void generate_cli_output(std::vector<VtableData> &vtables) {
   for (const auto &vtable : vtables) {
     fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
 
