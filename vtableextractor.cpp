@@ -129,11 +129,13 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
 
     typeinfo.ti =
         Typeinfo::vmi_class_type_info{.flags = flags,
-                                        .base_count = base_count,
-                                        .base_classes_info = base_classes_info};
-  } else {
+                                      .base_count = base_count,
+                                      .base_classes_info = base_classes_info};
+  } else if (typeinfo_classinfo_name.ends_with("__class_type_infoE")) {
     // class_type_info
     typeinfo.ti = Typeinfo::class_type_info{};
+  } else {
+    throw StringError("Unknown RTTI type: {}", typeinfo_classinfo_name);
   }
 
   return typeinfo;
