@@ -1,5 +1,7 @@
 #include "vtableextractor.hpp"
 #include "error.hpp"
+#include <bit>
+#include <cstdint>
 #include <fmt/core.h>
 #include <optional>
 #include <variant>
@@ -114,15 +116,13 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
 
       // FIXME: This isn't compatible with X86-64 because this assumes that
       // long is 32bits wide, but im lazy
-      auto offset_flags = get_data_at_offset<uint32_t>(
-          binary, addr + ((5 + (i * 2)) * pointer_size_for_binary));
-      auto offset_offset = get_data_at_offset<int32_t>(
+      auto offset = get_data_at_offset<int32_t>(
           binary, addr + ((5 + (i * 2)) * pointer_size_for_binary));
 
       // Lower octet is flags
-      base_class_info.offset_flags.flags = offset_flags & 0xff;
+      base_class_info.offset_flags.flags = offset & 0xff;
       // Rest is offset
-      base_class_info.offset_flags.offset = offset_offset >> 8;
+      base_class_info.offset_flags.offset = offset >> 8;
 
       base_classes_info.emplace_back(base_class_info);
     }
