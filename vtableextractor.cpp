@@ -306,6 +306,9 @@ void VtableExtractor::generate_binding_map() {
       const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(&binary);
       const auto dyld_info = binary_macho->dyld_info();
 
+      if (dyld_info == nullptr)
+        throw StringError("No dyld info, can't get bindings");
+
       for (const auto &binding_info : dyld_info->bindings()) {
         binding_map[binding_info.address()] = *binding_info.symbol();
       };

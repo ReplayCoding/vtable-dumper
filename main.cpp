@@ -117,8 +117,10 @@ int main(int argc, const char **argv) {
     fmt::print("usage: {} <binary>\n", argv[0]);
     return 1;
   };
-  auto binary = LIEF::Parser::parse(argv[1]);
-  auto vtables = VtableExtractor(*binary).get_vtables();
+  auto binary = LIEF::MachO::Parser::parse(argv[1]);
+  auto vtables = VtableExtractor(*binary->take(LIEF::MachO::CPU_TYPES::CPU_TYPE_X86)).get_vtables();
   // std::cout << generate_json_output(vtables);
   generate_cli_output(vtables);
+
+  return 0;
 };
