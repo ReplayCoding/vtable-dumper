@@ -94,7 +94,8 @@ std::string eighty_cols =
 
 void generate_cli_output(std::vector<VtableData> &vtables) {
   for (const auto &vtable : vtables) {
-    fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
+    // fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
+    fmt::print("{}\n", "_Z" + vtable.typeinfo.name);
 
     fmt::print("\ttypeinfo:\n");
     cli_print_typeinfo(vtable.typeinfo, "\t\t");
