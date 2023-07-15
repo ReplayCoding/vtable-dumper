@@ -1,4 +1,7 @@
 /.direnv
 /.cache
+/.gdb_history
 /build
 /tf2_mac
+/tf2
+/compile_commands.json

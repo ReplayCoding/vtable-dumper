@@ -47,7 +47,7 @@ struct VtableData {
 
 class VtableExtractor {
 public:
-  VtableExtractor(LIEF::Binary &binary);
+  VtableExtractor(std::unique_ptr<LIEF::Binary> binary);
 
   std::vector<VtableData> get_vtables();
 
@@ -67,7 +67,7 @@ private:
 
   std::map<uint64_t, LIEF::Symbol> symbol_map{};
   std::map<uint64_t, LIEF::Symbol> binding_map{};
-  LIEF::Binary &binary;
+  std::unique_ptr<LIEF::Binary> binary;
   int pointer_size_for_binary;
 };
 

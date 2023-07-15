@@ -124,7 +124,8 @@ int main(int argc, const char **argv) {
     return 2;
   }
 
-  auto vtables = VtableExtractor(*binary->take(LIEF::MachO::CPU_TYPES::CPU_TYPE_X86)).get_vtables();
+  auto arch_bin = binary->take(LIEF::MachO::CPU_TYPES::CPU_TYPE_X86);
+  auto vtables = VtableExtractor(std::move(arch_bin)).get_vtables();
   // std::cout << generate_json_output(vtables);
   generate_cli_output(vtables);
 

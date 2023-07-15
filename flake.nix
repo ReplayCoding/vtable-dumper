@@ -17,7 +17,7 @@
       devShell = pkgs.stdenv.mkDerivation {
         name = "shell";
         SYSTEMD_DEBUGGER = "lldb";
-        nativeBuildInputs = with pkgs; [cmake pkg-config ninja lldb];
+        nativeBuildInputs = with pkgs; [cmake pkg-config ninja gdb];
         buildInputs = with pkgs; [lief fmt nlohmann_json];
       };
     });
