@@ -9,7 +9,7 @@
 // later
 // bool do_we_swap_endianness(const LIEF::Binary *binary){};
 
-int get_pointer_size_for_bin(const LIEF::Binary *binary) {
+uint8_t get_pointer_size_for_bin(const LIEF::Binary *binary) {
   if (binary->header().is_32()) {
     return 4;
   } else if (binary->header().is_64()) {
@@ -82,12 +82,12 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
   }
 
   typeinfo.name = get_typeinfo_name(
-      get_ptr_at_offset(binary.get(), addr + pointer_size_for_binary));
+      get_ptr_at_offset(binary.get(), addr + pointer_size));
   auto typeinfo_classinfo_name = fixup_symbol_name(binary.get(), typeinfo_type);
 
   if (typeinfo_classinfo_name.ends_with("__si_class_type_infoE")) {
     auto typeinfo_addr =
-        get_ptr_at_offset(binary.get(), addr + (2 * pointer_size_for_binary));
+        get_ptr_at_offset(binary.get(), addr + (2 * pointer_size));
 
     if (typeinfo_addr != 0) {
       auto base_typeinfo = parse_typeinfo(typeinfo_addr);
@@ -96,9 +96,9 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
     };
   } else if (typeinfo_classinfo_name.ends_with("__vmi_class_type_infoE")) {
     auto flags = get_data_at_offset<uint32_t>(
-        binary.get(), addr + (2 * pointer_size_for_binary));
+        binary.get(), addr + (2 * pointer_size));
     auto base_count = get_data_at_offset<uint32_t>(
-        binary.get(), addr + (3 * pointer_size_for_binary));
+        binary.get(), addr + (3 * pointer_size));
 
     std::vector<Typeinfo::vmi_class_type_info::vmi_base_class_t>
         base_classes_info{};
@@ -108,7 +108,7 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
         // It could be located in a different lib, we will catch the error in
         // this case.
         auto base_class = parse_typeinfo(get_ptr_at_offset(
-            binary.get(), addr + ((4 + (i * 2)) * pointer_size_for_binary)));
+            binary.get(), addr + ((4 + (i * 2)) * pointer_size)));
 
         base_class_info.base_class = std::make_shared<Typeinfo>(base_class);
       } catch (std::exception &e) {
@@ -118,7 +118,7 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
       // FIXME: This isn't compatible with X86-64 because this assumes that
       // long is 32bits wide, but im lazy
       auto offset = get_data_at_offset<int32_t>(
-          binary.get(), addr + ((5 + (i * 2)) * pointer_size_for_binary));
+          binary.get(), addr + ((5 + (i * 2)) * pointer_size));
 
       // Lower octet is flags
       base_class_info.offset_flags.flags = offset & 0xff;
@@ -180,7 +180,7 @@ VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
     };
 
     if (symbol) {
-      current_loop_addr += pointer_size_for_binary;
+      current_loop_addr += pointer_size;
 
       VtableMember member{.name = fixup_symbol_name(binary.get(), symbol.value())};
       members.emplace_back(member);
@@ -196,7 +196,7 @@ VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
 std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
   // Handle offset-to-X ptrs in classes with X-in-Y vtables;
   // This var is used to fixup the vtable offset.
-  int vtable_location = addr + pointer_size_for_binary;
+  int vtable_location = addr + pointer_size;
   auto typeinfo_addr = 0;
   while (true) {
     // TODO: fix a terrible edge case
@@ -208,7 +208,7 @@ std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
     };
 
     typeinfo_addr = get_ptr_at_offset(binary.get(), vtable_location);
-    vtable_location += pointer_size_for_binary;
+    vtable_location += pointer_size;
 
     if (symbol_map.contains(typeinfo_addr) &&
         !symbol_map.at(typeinfo_addr).name().empty() &&
@@ -250,7 +250,7 @@ VtableData VtableExtractor::get_vtable(uint64_t addr) {
 
   uint64_t current_loop_addr =
       vftable_location +
-      (vftable_primary_methods.size() * pointer_size_for_binary);
+      (vftable_primary_methods.size() * pointer_size);
   bool should_we_continue{do_continue &&
                           is_there_a_vmi_in_typeinfo_graph(&typeinfo)};
 
@@ -264,7 +264,7 @@ VtableData VtableExtractor::get_vtable(uint64_t addr) {
 
       vftables.emplace_back(vftable_methods);
       current_loop_addr =
-          vftable_location + (vftable_methods.size() * pointer_size_for_binary);
+          vftable_location + (vftable_methods.size() * pointer_size);
       should_we_continue = do_continue;
     } catch (std::exception &_) {
       should_we_continue = false;
@@ -274,7 +274,6 @@ VtableData VtableExtractor::get_vtable(uint64_t addr) {
   return {
       .typeinfo = typeinfo,
       .addr = addr,
-      .pointer_size = pointer_size_for_binary,
       .vftables = vftables,
   };
 };
@@ -325,7 +324,7 @@ void VtableExtractor::generate_binding_map() {
 
 VtableExtractor::VtableExtractor(std::unique_ptr<LIEF::Binary> binary)
     : binary(std::move(binary)) {
-  pointer_size_for_binary = get_pointer_size_for_bin(this->binary.get());
+  pointer_size = get_pointer_size_for_bin(this->binary.get());
 
   generate_symbol_map();
   generate_binding_map();

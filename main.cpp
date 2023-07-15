@@ -40,12 +40,13 @@ json generate_json_from_typeinfo(const Typeinfo typeinfo) {
   return typeinfo_obj;
 };
 
-json generate_json_output(std::vector<VtableData> &vtables) {
+json generate_json_output(uint8_t pointer_size,
+                          std::vector<VtableData> &vtables) {
   json vtables_array = json::array();
   for (const auto &vtable : vtables) {
     json vtable_obj;
     vtable_obj["address"] = vtable.addr;
-    vtable_obj["pointer_size"] = vtable.pointer_size;
+    vtable_obj["pointer_size"] = pointer_size;
     vtable_obj["typeinfo"] = generate_json_from_typeinfo(vtable.typeinfo);
 
     json vftables_obj = json::array();
@@ -92,10 +93,12 @@ std::string eighty_cols =
     "-----------------------------------------------------------"
     "---------------------";
 
-void generate_cli_output(std::vector<VtableData> &vtables) {
+void generate_cli_output(uint8_t pointer_size,
+                         std::vector<VtableData> &vtables) {
   for (const auto &vtable : vtables) {
-    // fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
+    // Add _Z prefix to get demangler to work
     fmt::print("{}\n", "_Z" + vtable.typeinfo.name);
+    // fmt::print("{} = {:#08x}\n", "_Z" + vtable.typeinfo.name, vtable.addr);
 
     fmt::print("\ttypeinfo:\n");
     cli_print_typeinfo(vtable.typeinfo, "\t\t");
@@ -106,7 +109,7 @@ void generate_cli_output(std::vector<VtableData> &vtables) {
       for (size_t i = 0; i < vftable.size(); i++) {
         auto member = vftable[i];
         fmt::print("\t{} is at offset {:X} (member# {})\n", member.name,
-                   i * vtable.pointer_size, i);
+                   i * pointer_size, i);
       };
     };
     fmt::print("\n\n" + eighty_cols + " NEXT VTABLE \n\n");
@@ -125,9 +128,10 @@ int main(int argc, const char **argv) {
   }
 
   auto arch_bin = binary->take(LIEF::MachO::CPU_TYPES::CPU_TYPE_X86);
-  auto vtables = VtableExtractor(std::move(arch_bin)).get_vtables();
+  auto extractor = VtableExtractor(std::move(arch_bin));
+  auto vtables = extractor.get_vtables();
   // std::cout << generate_json_output(vtables);
-  generate_cli_output(vtables);
+  generate_cli_output(extractor.get_pointer_size(), vtables);
 
   return 0;
 };

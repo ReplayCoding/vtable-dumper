@@ -40,8 +40,6 @@ struct VtableData {
   Typeinfo typeinfo{};
   uint64_t addr;
 
-  int pointer_size;
-  // This is oh so dumb looking
   std::vector<std::vector<VtableMember>> vftables;
 };
 
@@ -50,6 +48,7 @@ public:
   VtableExtractor(std::unique_ptr<LIEF::Binary> binary);
 
   std::vector<VtableData> get_vtables();
+  inline uint8_t get_pointer_size(){return pointer_size;};
 
 private:
   void generate_symbol_map();
@@ -68,7 +67,7 @@ private:
   std::map<uint64_t, LIEF::Symbol> symbol_map{};
   std::map<uint64_t, LIEF::Symbol> binding_map{};
   std::unique_ptr<LIEF::Binary> binary;
-  int pointer_size_for_binary;
+  uint8_t pointer_size;
 };
 
 inline std::string_view get_typeinfo_type_name(const Typeinfo &t) {
