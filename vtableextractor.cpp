@@ -6,9 +6,6 @@
 #include <optional>
 #include <variant>
 
-// later
-// bool do_we_swap_endianness(const LIEF::Binary *binary){};
-
 uint8_t get_pointer_size_for_bin(const LIEF::Binary *binary) {
   if (binary->header().is_32()) {
     return 4;
@@ -81,8 +78,8 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
         addr);
   }
 
-  typeinfo.name = get_typeinfo_name(
-      get_ptr_at_offset(binary.get(), addr + pointer_size));
+  typeinfo.name =
+      get_typeinfo_name(get_ptr_at_offset(binary.get(), addr + pointer_size));
   auto typeinfo_classinfo_name = fixup_symbol_name(binary.get(), typeinfo_type);
 
   if (typeinfo_classinfo_name.ends_with("__si_class_type_infoE")) {
@@ -95,10 +92,10 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
           .base_class = std::make_shared<Typeinfo>(base_typeinfo)};
     };
   } else if (typeinfo_classinfo_name.ends_with("__vmi_class_type_infoE")) {
-    auto flags = get_data_at_offset<uint32_t>(
-        binary.get(), addr + (2 * pointer_size));
-    auto base_count = get_data_at_offset<uint32_t>(
-        binary.get(), addr + (3 * pointer_size));
+    auto flags =
+        get_data_at_offset<uint32_t>(binary.get(), addr + (2 * pointer_size));
+    auto base_count =
+        get_data_at_offset<uint32_t>(binary.get(), addr + (3 * pointer_size));
 
     std::vector<Typeinfo::vmi_class_type_info::vmi_base_class_t>
         base_classes_info{};
@@ -182,7 +179,8 @@ VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
     if (symbol) {
       current_loop_addr += pointer_size;
 
-      VtableMember member{.name = fixup_symbol_name(binary.get(), symbol.value())};
+      VtableMember member{.name =
+                              fixup_symbol_name(binary.get(), symbol.value())};
       members.emplace_back(member);
     } else {
       should_we_continue = true;
@@ -249,8 +247,7 @@ VtableData VtableExtractor::get_vtable(uint64_t addr) {
   vftables.emplace_back(vftable_primary_methods);
 
   uint64_t current_loop_addr =
-      vftable_location +
-      (vftable_primary_methods.size() * pointer_size);
+      vftable_location + (vftable_primary_methods.size() * pointer_size);
   bool should_we_continue{do_continue &&
                           is_there_a_vmi_in_typeinfo_graph(&typeinfo)};
 
@@ -303,7 +300,8 @@ void VtableExtractor::generate_symbol_map() {
 void VtableExtractor::generate_binding_map() {
   switch (binary->format()) {
     case LIEF::FORMAT_MACHO: {
-      const auto binary_macho = dynamic_cast<LIEF::MachO::Binary *>(binary.get());
+      const auto binary_macho =
+          dynamic_cast<LIEF::MachO::Binary *>(binary.get());
       const auto dyld_info = binary_macho->dyld_info();
 
       if (dyld_info == nullptr)
