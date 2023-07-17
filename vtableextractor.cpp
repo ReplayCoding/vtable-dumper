@@ -139,6 +139,49 @@ Typeinfo VtableExtractor::parse_typeinfo(uint64_t addr) {
   return typeinfo;
 };
 
+std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
+  // Handle offset-to-X ptrs in classes with X-in-Y vtables;
+  // This var is used to fixup the vtable offset.
+  int vtable_location = addr + pointer_size;
+  auto typeinfo_addr = 0;
+  while (true) {
+    // TODO: fix a terrible edge case
+    // Basically avoid a case where we misread typeinfo as a part of the
+    // vftables because of padding fucking with the checks
+    if (symbol_map.contains(vtable_location)) {
+      throw StringError("Stupid fucking edge case happened at {}",
+                        vtable_location);
+    };
+
+    typeinfo_addr = get_ptr_at_offset(binary.get(), vtable_location);
+    vtable_location += pointer_size;
+
+    if (symbol_map.contains(typeinfo_addr) &&
+        !symbol_map.at(typeinfo_addr).name().empty() &&
+        fixup_symbol_name(binary.get(), symbol_map.at(typeinfo_addr).name())
+            .starts_with("_ZTI")) {
+      break;
+    }
+  }
+
+  return std::pair(typeinfo_addr, vtable_location);
+};
+
+bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(Typeinfo *typeinfo) {
+  if (typeinfo == nullptr) {
+    return false;
+  };
+
+  if (std::holds_alternative<Typeinfo::vmi_class_type_info>(typeinfo->ti)) {
+    return true;
+  } else if (auto ti =
+                 std::get_if<Typeinfo::si_class_type_info>(&typeinfo->ti)) {
+    return is_there_a_vmi_in_typeinfo_graph(ti->base_class.get());
+  };
+
+  return false;
+};
+
 std::pair<std::vector<VtableMember>, bool>
 VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
   // fmt::print(" ... {:08X}\n", vftable_addr);
@@ -189,49 +232,6 @@ VtableExtractor::get_methods_of_vftable(uint64_t vftable_addr) {
   };
 
   return std::pair(members, should_we_continue);
-};
-
-std::pair<uint64_t, uint64_t> VtableExtractor::find_typeinfo(uint64_t addr) {
-  // Handle offset-to-X ptrs in classes with X-in-Y vtables;
-  // This var is used to fixup the vtable offset.
-  int vtable_location = addr + pointer_size;
-  auto typeinfo_addr = 0;
-  while (true) {
-    // TODO: fix a terrible edge case
-    // Basically avoid a case where we misread typeinfo as a part of the
-    // vftables because of padding fucking with the checks
-    if (symbol_map.contains(vtable_location)) {
-      throw StringError("Stupid fucking edge case happened at {}",
-                        vtable_location);
-    };
-
-    typeinfo_addr = get_ptr_at_offset(binary.get(), vtable_location);
-    vtable_location += pointer_size;
-
-    if (symbol_map.contains(typeinfo_addr) &&
-        !symbol_map.at(typeinfo_addr).name().empty() &&
-        fixup_symbol_name(binary.get(), symbol_map.at(typeinfo_addr).name())
-            .starts_with("_ZTI")) {
-      break;
-    }
-  }
-
-  return std::pair(typeinfo_addr, vtable_location);
-};
-
-bool VtableExtractor::is_there_a_vmi_in_typeinfo_graph(Typeinfo *typeinfo) {
-  if (typeinfo == nullptr) {
-    return false;
-  };
-
-  if (std::holds_alternative<Typeinfo::vmi_class_type_info>(typeinfo->ti)) {
-    return true;
-  } else if (auto ti =
-                 std::get_if<Typeinfo::si_class_type_info>(&typeinfo->ti)) {
-    return is_there_a_vmi_in_typeinfo_graph(ti->base_class.get());
-  };
-
-  return false;
 };
 
 VtableData VtableExtractor::get_vtable(uint64_t addr) {
