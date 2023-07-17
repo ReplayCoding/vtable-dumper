@@ -42,25 +42,31 @@ json generate_json_from_typeinfo(const Typeinfo typeinfo) {
 
 json generate_json_output(uint8_t pointer_size,
                           std::vector<VtableData> &vtables) {
+  json vtables_obj;
   json vtables_array = json::array();
+
   for (const auto &vtable : vtables) {
     json vtable_obj;
     vtable_obj["address"] = vtable.addr;
-    vtable_obj["pointer_size"] = pointer_size;
     vtable_obj["typeinfo"] = generate_json_from_typeinfo(vtable.typeinfo);
 
-    json vftables_obj = json::array();
+    json vftables_array = json::array();
     for (const auto &vftable : vtable.vftables) {
-      json vftable_obj = json::array();
+      json vftable_array = json::array();
       for (const auto &member : vftable) {
-        vftable_obj.emplace_back(member.name);
+        vftable_array.emplace_back(member.name);
       };
-      vftables_obj.emplace_back(vftable_obj);
+
+      vftables_array.emplace_back(vftable_array);
     };
-    vtable_obj["vftables"] = vftables_obj;
+
+    vtable_obj["vftables"] = vftables_array;
     vtables_array.emplace_back(vtable_obj);
   }
-  return vtables_array;
+
+  vtables_obj["pointer_size"] = pointer_size;
+  vtables_obj["vtables"] = vtables_array;
+  return vtables_obj;
 };
 
 void cli_print_typeinfo(const Typeinfo &typeinfo, std::string prefix) {
@@ -130,8 +136,8 @@ int main(int argc, const char **argv) {
   auto arch_bin = binary->take(LIEF::MachO::CPU_TYPES::CPU_TYPE_X86);
   auto extractor = VtableExtractor(std::move(arch_bin));
   auto vtables = extractor.get_vtables();
-  // std::cout << generate_json_output(vtables);
-  generate_cli_output(extractor.get_pointer_size(), vtables);
+  std::cout << generate_json_output(extractor.get_pointer_size(), vtables);
+  // generate_cli_output(extractor.get_pointer_size(), vtables);
 
   return 0;
 };
